@@ -7,7 +7,7 @@ const DashboardLayout = () => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
     return (
-        <div className="flex min-h-screen bg-[#f8fafc] overflow-x-hidden">
+        <div className="flex h-screen bg-[#f8fafc] overflow-hidden">
             {/* Mobile Overlay */}
             {isSidebarOpen && (
                 <div
@@ -23,7 +23,7 @@ const DashboardLayout = () => {
                 <header className="lg:hidden h-16 bg-white border-b border-slate-100 px-6 flex items-center justify-between sticky top-0 z-20">
                     <div className="flex items-center gap-2">
                         <div className="w-8 h-8 bg-[#0d9488] rounded-lg"></div>
-                        <span className="font-bold text-slate-800">ImplaScan</span>
+                        <span className="font-bold text-slate-800">MedSaaS</span>
                     </div>
                     <button
                         onClick={() => setIsSidebarOpen(true)}
