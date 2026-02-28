@@ -22,6 +22,8 @@ const AccountSettings = () => {
     const [isSaving, setIsSaving] = useState(false);
     const [showSuccess, setShowSuccess] = useState(false);
     const [twoFactorEnabled, setTwoFactorEnabled] = useState(true);
+    const [profileImage, setProfileImage] = useState("https://ui-avatars.com/api/?name=Sarah+Chen&background=f0f9f9&color=0d9488&bold=true&size=200");
+    const fileInputRef = React.useRef(null);
 
     const handleSave = () => {
         setIsSaving(true);
@@ -33,8 +35,32 @@ const AccountSettings = () => {
         }, 800);
     };
 
+    const handleImageChange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setProfileImage(reader.result);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    const triggerUpload = () => {
+        if (fileInputRef.current) {
+            fileInputRef.current.click();
+        }
+    };
+
     return (
         <div className="p-6 lg:p-10 max-w-[1200px] mx-auto overflow-y-auto h-full scrollbar-hidden pb-32">
+            <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleImageChange}
+                accept="image/*"
+                className="hidden"
+            />
             {/* Breadcrumbs */}
             <nav className="flex items-center gap-2 mb-6 text-sm font-medium">
                 <span className="text-slate-400">Admin</span>
@@ -75,10 +101,10 @@ const AccountSettings = () => {
                     <div className="flex flex-col lg:flex-row gap-12">
                         {/* Avatar Upload */}
                         <div className="flex flex-col items-center gap-4">
-                            <div className="relative group cursor-pointer">
+                            <div className="relative group cursor-pointer" onClick={triggerUpload}>
                                 <div className="w-40 h-40 rounded-full border-4 border-white shadow-xl overflow-hidden">
                                     <img
-                                        src="https://ui-avatars.com/api/?name=Sarah+Chen&background=f0f9f9&color=0d9488&bold=true&size=200"
+                                        src={profileImage}
                                         alt="Profile"
                                         className="w-full h-full object-cover"
                                     />
