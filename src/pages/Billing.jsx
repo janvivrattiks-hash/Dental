@@ -32,14 +32,6 @@ const Billing = () => {
             iconClass: 'bg-[#eefcfb] text-[#0d9488]'
         },
         {
-            title: 'Pending Invoices',
-            value: '$4,200.00',
-            trend: '14 invoices outstanding',
-            trendType: 'neutral',
-            icon: Clock,
-            iconClass: 'bg-amber-50 text-amber-500'
-        },
-        {
             title: 'Active Subscriptions',
             value: '842',
             trend: '3% growth rate',
@@ -119,7 +111,7 @@ const Billing = () => {
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
                 {stats.map((stat, idx) => (
                     <div key={idx} className="bg-white p-8 rounded-[24px] shadow-xl shadow-slate-200/40 border border-slate-50 group transition-all duration-300">
                         <div className="flex justify-between items-start mb-6">

@@ -88,12 +88,7 @@ const Dashboard = () => {
                             className="bg-white border-slate-100 shadow-sm h-11 lg:h-12 rounded-xl w-full"
                         />
                     </div>
-                    <button className="w-11 lg:w-12 h-11 lg:h-12 flex items-center justify-center bg-white border border-slate-100 rounded-xl text-slate-400 hover:text-[#0d9488] transition-all shadow-sm group">
-                        <div className="relative">
-                            <Bell size={20} />
-                            <span className="absolute top-0 right-0 w-2 h-2 bg-rose-500 rounded-full border-2 border-white"></span>
-                        </div>
-                    </button>
+
                     <button className="flex items-center gap-2 px-4 lg:px-6 h-11 lg:h-12 bg-white border border-slate-100 rounded-xl text-slate-900 font-bold text-sm lg:text-base shadow-sm hover:border-[#0d9488]/30 transition-all">
                         <Calendar size={18} className="text-slate-400" />
                         <span>Last 30 Days</span>
@@ -102,7 +97,7 @@ const Dashboard = () => {
             </div>
 
             {/* Stats Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6 mb-10">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6 mb-10">
                 <div className="bg-white p-6 rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-50 group hover:translate-y-[-4px] transition-all duration-300">
                     <div className="flex justify-between items-start mb-6">
                         <div className="w-12 h-12 bg-clinical-blue/10 rounded-xl flex items-center justify-center text-clinical-blue group-hover:scale-110 transition-transform">
@@ -142,18 +137,7 @@ const Dashboard = () => {
                     <h2 className="text-2xl lg:text-[28px] font-extrabold text-slate-900">12,400</h2>
                 </div>
 
-                <div className="bg-white p-6 rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-50 group hover:translate-y-[-4px] transition-all duration-300">
-                    <div className="flex justify-between items-start mb-6">
-                        <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform">
-                            <DollarSign size={24} />
-                        </div>
-                        <div className="bg-emerald-50 text-emerald-600 px-2 py-1 rounded-lg text-xs font-bold flex items-center gap-1">
-                            <TrendingUp size={12} /> 10%
-                        </div>
-                    </div>
-                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">Revenue</p>
-                    <h2 className="text-2xl lg:text-[28px] font-extrabold text-slate-900">$45.2k</h2>
-                </div>
+
             </div>
 
             {/* Quick Actions */}
@@ -162,12 +146,12 @@ const Dashboard = () => {
                 <div className="flex flex-wrap items-center gap-3 lg:gap-4">
                     <Button
                         onClick={() => setIsAddLibraryModalOpen(true)}
-                        className="h-12 lg:h-14 px-6 lg:px-8 bg-[#0d9488] hover:bg-[#0c857a] text-white rounded-xl font-bold flex items-center gap-3 shadow-lg shadow-teal-500/20 active:scale-95 transition-all text-sm lg:text-base">
-                        <Plus size={18} className="p-0.5 bg-white/20 rounded-md" />
+                        className="h-12 lg:h-14 px-6 lg:px-8 bg-white border-slate-100 text-[#0d9488] rounded-xl font-bold flex items-center gap-3 shadow-sm hover:bg-slate-50 transition-all text-sm lg:text-base">
+                        <Plus size={18} className="p-0.5 bg-slate-100 rounded-md" />
                         Add Library
                     </Button>
-                    <Button className="h-12 lg:h-14 px-6 lg:px-8 bg-[#0d9488] hover:bg-[#0c857a] text-white rounded-xl font-bold flex items-center gap-3 shadow-lg shadow-teal-500/20 active:scale-95 transition-all text-sm lg:text-base">
-                        <Plus size={18} className="p-0.5 bg-white/20 rounded-md" />
+                    <Button className="h-12 lg:h-14 px-6 lg:px-8 bg-white border-slate-100 text-[#0d9488] rounded-xl font-bold flex items-center gap-3 shadow-sm hover:bg-slate-50 transition-all text-sm lg:text-base">
+                        <Plus size={18} className="p-0.5 bg-slate-100 rounded-md" />
                         Add Plan
                     </Button>
                     <Link to="/payments">
@@ -205,7 +189,7 @@ const Dashboard = () => {
                             </thead>
                             <tbody>
                                 {scanActivity.map((scan) => (
-                                    <tr key={scan.id} className="group hover:bg-slate-50/50 transition-all duration-300 border-b border-slate-50">
+                                    <tr key={scan.id} className="group hover:bg-slate-50/50 transition-all duration-300 border-b border-slate-50 whitespace-nowrap">
                                         <td className="px-6 lg:px-8 py-4 lg:py-6">
                                             <div className="flex items-center gap-3 lg:gap-4">
                                                 <div className="w-9 lg:w-10 h-9 lg:h-10 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500 border border-white shadow-sm flex-shrink-0">

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
     Plus,
     Check,
@@ -8,12 +8,16 @@ import {
     Building2,
     ChevronRight,
     ClipboardList,
-    MoreHorizontal
+    MoreHorizontal,
+    Trash2
 } from 'lucide-react';
 import { cn } from '../utils/utils';
 import Button from '../components/ui/Button';
+import CreatePlanModal from '../components/modals/CreatePlanModal';
 
 const SubscriptionPlans = () => {
+    const [isCreatePlanModalOpen, setIsCreatePlanModalOpen] = useState(false);
+    const [selectedPlan, setSelectedPlan] = useState(null);
     const plans = [
         {
             name: 'Basic',
@@ -78,7 +82,9 @@ const SubscriptionPlans = () => {
                     <h1 className="text-2xl lg:text-3xl font-bold text-slate-900 tracking-tight">Subscription Plans</h1>
                 </div>
 
-                <Button className="h-12 px-6 bg-[#0d9488] hover:bg-[#0c857a] text-white rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-teal-500/20 active:scale-95 transition-all">
+                <Button
+                    onClick={() => setIsCreatePlanModalOpen(true)}
+                    className="h-12 px-6 bg-[#0d9488] hover:bg-[#0c857a] text-white rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-teal-500/20 active:scale-95 transition-all">
                     <Plus size={20} />
                     Create New Plan
                 </Button>
@@ -115,11 +121,16 @@ const SubscriptionPlans = () => {
                                     <h3 className="text-2xl font-bold text-slate-900 mb-1">{plan.name}</h3>
                                     <p className="text-slate-500 font-medium">{plan.description}</p>
                                 </div>
-                                <div className={cn(
-                                    "w-12 h-12 rounded-xl flex items-center justify-center transition-colors",
-                                    plan.isActive ? "bg-[#eefcfb] text-[#0d9488]" : "bg-slate-50 text-slate-400"
-                                )}>
-                                    <plan.icon size={24} />
+                                <div className="flex items-center gap-2">
+                                    <button className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all duration-300">
+                                        <Trash2 size={20} />
+                                    </button>
+                                    <div className={cn(
+                                        "w-12 h-12 rounded-xl flex items-center justify-center transition-colors",
+                                        plan.isActive ? "bg-[#eefcfb] text-[#0d9488]" : "bg-slate-50 text-slate-400"
+                                    )}>
+                                        <plan.icon size={24} />
+                                    </div>
                                 </div>
                             </div>
 
@@ -157,6 +168,10 @@ const SubscriptionPlans = () => {
 
                             <Button
                                 variant={plan.isActive ? 'default' : 'outline'}
+                                onClick={() => {
+                                    setSelectedPlan(plan);
+                                    setIsCreatePlanModalOpen(true);
+                                }}
                                 className={cn(
                                     "w-full h-14 rounded-2xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-all text-sm lg:text-base",
                                     plan.isActive
@@ -204,6 +219,15 @@ const SubscriptionPlans = () => {
                     ))}
                 </div>
             </div>
+
+            <CreatePlanModal
+                isOpen={isCreatePlanModalOpen}
+                plan={selectedPlan}
+                onClose={() => {
+                    setIsCreatePlanModalOpen(false);
+                    setSelectedPlan(null);
+                }}
+            />
         </div>
     );
 };

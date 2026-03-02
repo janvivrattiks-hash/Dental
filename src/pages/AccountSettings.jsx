@@ -11,7 +11,9 @@ import {
     Download,
     CheckCircle2,
     X,
-    Camera
+    Camera,
+    Eye,
+    EyeOff
 } from 'lucide-react';
 import { cn } from '../utils/utils';
 import Button from '../components/ui/Button';
@@ -23,6 +25,9 @@ const AccountSettings = () => {
     const [showSuccess, setShowSuccess] = useState(false);
     const [twoFactorEnabled, setTwoFactorEnabled] = useState(true);
     const [profileImage, setProfileImage] = useState("https://ui-avatars.com/api/?name=Sarah+Chen&background=f0f9f9&color=0d9488&bold=true&size=200");
+    const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+    const [showNewPassword, setShowNewPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const fileInputRef = React.useRef(null);
 
     const handleSave = () => {
@@ -192,87 +197,76 @@ const AccountSettings = () => {
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                     <div className="space-y-2">
                                         <label className="text-[11px] font-bold text-slate-400 ml-1 uppercase tracking-wider">Current Password</label>
-                                        <Input
-                                            type="password"
-                                            defaultValue="password123"
-                                            className="h-12 rounded-xl bg-slate-50/50 border-slate-100 px-5 font-bold tracking-widest text-[#0d9488]"
-                                        />
+                                        <div className="relative group">
+                                            <Input
+                                                type={showCurrentPassword ? "text" : "password"}
+                                                defaultValue="password123"
+                                                className="h-12 rounded-xl bg-slate-50/50 border-slate-100 pl-5 pr-12 font-bold tracking-widest text-[#0d9488]"
+                                            />
+                                            <button
+                                                onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                                                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-[#0d9488] transition-colors"
+                                            >
+                                                {showCurrentPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                            </button>
+                                        </div>
                                     </div>
                                     <div className="space-y-2">
                                         <label className="text-[11px] font-bold text-slate-400 ml-1 uppercase tracking-wider">New Password</label>
-                                        <Input
-                                            type="password"
-                                            defaultValue="password123"
-                                            className="h-12 rounded-xl bg-slate-50/50 border-slate-100 px-5 font-bold tracking-widest text-slate-400"
-                                        />
+                                        <div className="relative group">
+                                            <Input
+                                                type={showNewPassword ? "text" : "password"}
+                                                defaultValue="password123"
+                                                className="h-12 rounded-xl bg-slate-50/50 border-slate-100 pl-5 pr-12 font-bold tracking-widest text-slate-400"
+                                            />
+                                            <button
+                                                onClick={() => setShowNewPassword(!showNewPassword)}
+                                                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-[#0d9488] transition-colors"
+                                            >
+                                                {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                            </button>
+                                        </div>
                                     </div>
                                     <div className="space-y-2">
                                         <label className="text-[11px] font-bold text-slate-400 ml-1 uppercase tracking-wider">Confirm New Password</label>
-                                        <Input
-                                            type="password"
-                                            defaultValue="password123"
-                                            className="h-12 rounded-xl bg-slate-50/50 border-slate-100 px-5 font-bold tracking-widest text-slate-400"
-                                        />
+                                        <div className="relative group">
+                                            <Input
+                                                type={showConfirmPassword ? "text" : "password"}
+                                                defaultValue="password123"
+                                                className="h-12 rounded-xl bg-slate-50/50 border-slate-100 pl-5 pr-12 font-bold tracking-widest text-slate-400"
+                                            />
+                                            <button
+                                                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-[#0d9488] transition-colors"
+                                            >
+                                                {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <div className="bg-slate-50/50 p-8 lg:p-10">
-                        <div className="flex flex-col md:flex-row items-center justify-between gap-6 p-6 lg:p-8 bg-white rounded-3xl border border-slate-100 shadow-sm">
-                            <div className="flex items-center gap-5">
-                                <div className="w-14 h-14 bg-clinical-teal/5 rounded-2xl flex items-center justify-center text-clinical-teal">
-                                    <Smartphone size={28} />
-                                </div>
-                                <div>
-                                    <h4 className="font-bold text-slate-900 leading-tight mb-1">Two-Factor Authentication (2FA)</h4>
-                                    <p className="text-sm font-medium text-slate-400 max-w-lg">
-                                        Add an extra layer of security to your account by requiring a verification code in addition to your password.
-                                    </p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-4">
-                                <span className={cn(
-                                    "text-sm font-bold transition-colors",
-                                    twoFactorEnabled ? "text-[#0d9488]" : "text-slate-400"
-                                )}>
-                                    {twoFactorEnabled ? "Enabled" : "Disabled"}
-                                </span>
-                                <button
-                                    onClick={() => setTwoFactorEnabled(!twoFactorEnabled)}
-                                    className={cn(
-                                        "w-12 h-6 rounded-full relative transition-all duration-300 outline-none",
-                                        twoFactorEnabled ? "bg-[#0d9488]" : "bg-slate-300"
-                                    )}
-                                >
-                                    <div className={cn(
-                                        "absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-all duration-300 shadow-sm",
-                                        twoFactorEnabled && "translate-x-6"
-                                    )} />
-                                </button>
-                            </div>
-                        </div>
-                    </div>
                 </div>
+            </div>
 
-                {/* Account Data Audit Card */}
-                <div className="bg-white rounded-[32px] p-8 lg:p-10 shadow-xl shadow-slate-200/40 border border-slate-50 flex flex-col md:flex-row items-center justify-between gap-6">
-                    <div className="flex items-center gap-5">
-                        <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-500">
-                            <Download size={22} />
-                        </div>
-                        <div>
-                            <h2 className="text-lg font-bold text-slate-900 leading-tight mb-1">Account Data Audit</h2>
-                            <p className="text-sm font-medium text-slate-400">
-                                Download a full record of your account activity and personal data.
-                            </p>
-                        </div>
+            {/* Account Data Audit Card */}
+            <div className="bg-white rounded-[32px] p-8 lg:p-10 shadow-xl shadow-slate-200/40 border border-slate-50 flex flex-col md:flex-row items-center justify-between gap-6">
+                <div className="flex items-center gap-5">
+                    <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-500">
+                        <Download size={22} />
                     </div>
-                    <Button variant="outline" className="h-11 px-8 border-slate-100 text-slate-700 font-bold hover:bg-slate-50 transition-all rounded-xl">
-                        Request Export
-                    </Button>
+                    <div>
+                        <h2 className="text-lg font-bold text-slate-900 leading-tight mb-1">Account Data Audit</h2>
+                        <p className="text-sm font-medium text-slate-400">
+                            Download a full record of your account activity and personal data.
+                        </p>
+                    </div>
                 </div>
+                <Button variant="outline" className="h-11 px-8 border-slate-100 text-slate-700 font-bold hover:bg-slate-50 transition-all rounded-xl">
+                    Request Export
+                </Button>
             </div>
 
             {/* Success Toast */}
