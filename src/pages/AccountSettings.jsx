@@ -249,24 +249,24 @@ const AccountSettings = () => {
                     </div>
 
                 </div>
-            </div>
 
-            {/* Account Data Audit Card */}
-            <div className="bg-white rounded-[32px] p-8 lg:p-10 shadow-xl shadow-slate-200/40 border border-slate-50 flex flex-col md:flex-row items-center justify-between gap-6">
-                <div className="flex items-center gap-5">
-                    <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-500">
-                        <Download size={22} />
+                {/* Account Data Audit Card */}
+                <div className="bg-white rounded-[32px] p-8 lg:p-10 shadow-xl shadow-slate-200/40 border border-slate-50 flex flex-col md:flex-row items-center justify-between gap-6">
+                    <div className="flex items-center gap-5">
+                        <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-500">
+                            <Download size={22} />
+                        </div>
+                        <div>
+                            <h2 className="text-lg font-bold text-slate-900 leading-tight mb-1">Account Data Audit</h2>
+                            <p className="text-sm font-medium text-slate-400">
+                                Download a full record of your account activity and personal data.
+                            </p>
+                        </div>
                     </div>
-                    <div>
-                        <h2 className="text-lg font-bold text-slate-900 leading-tight mb-1">Account Data Audit</h2>
-                        <p className="text-sm font-medium text-slate-400">
-                            Download a full record of your account activity and personal data.
-                        </p>
-                    </div>
+                    <Button variant="outline" className="h-11 px-8 border-slate-100 text-slate-700 font-bold hover:bg-slate-50 transition-all rounded-xl">
+                        Request Export
+                    </Button>
                 </div>
-                <Button variant="outline" className="h-11 px-8 border-slate-100 text-slate-700 font-bold hover:bg-slate-50 transition-all rounded-xl">
-                    Request Export
-                </Button>
             </div>
 
             {/* Success Toast */}
