@@ -1,13 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     ChevronRight,
     User,
     Mail,
-    Briefcase,
-    Globe,
     ShieldCheck,
-    Lock,
-    Smartphone,
     Download,
     CheckCircle2,
     X,
@@ -15,29 +11,131 @@ import {
     Eye,
     EyeOff
 } from 'lucide-react';
-import { cn } from '../utils/utils';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
-import { Link } from 'react-router-dom';
+import { useContextProvider } from '../ContextProvider';
+import api, { notifyError, notifySuccess } from '../Script/api';
 
 const AccountSettings = () => {
+    const { user: currentAdmin, adminToken, refreshCurrentAdmin } = useContextProvider();
     const [isSaving, setIsSaving] = useState(false);
     const [showSuccess, setShowSuccess] = useState(false);
-    const [twoFactorEnabled, setTwoFactorEnabled] = useState(true);
-    const [profileImage, setProfileImage] = useState("https://ui-avatars.com/api/?name=Sarah+Chen&background=f0f9f9&color=0d9488&bold=true&size=200");
+    const [profileImage, setProfileImage] = useState('https://ui-avatars.com/api/?name=Admin+User&background=f0f9f9&color=0d9488&bold=true&size=200');
     const [showCurrentPassword, setShowCurrentPassword] = useState(false);
     const [showNewPassword, setShowNewPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+    const [profileForm, setProfileForm] = useState({
+        fullName: '',
+        email: '',
+        role: 'System Administrator',
+        language: 'English (US)',
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: '',
+    });
     const fileInputRef = React.useRef(null);
 
-    const handleSave = () => {
+    const resetPasswordFields = () => {
+        setProfileForm((current) => ({
+            ...current,
+            currentPassword: '',
+            newPassword: '',
+            confirmPassword: '',
+        }));
+    };
+
+    useEffect(() => {
+        const fullName = currentAdmin?.username || currentAdmin?.name || currentAdmin?.email || 'Admin User';
+        const email = currentAdmin?.email || '';
+        const role = currentAdmin?.role || 'System Administrator';
+
+        setProfileForm((current) => ({
+            ...current,
+            fullName,
+            email,
+            role,
+        }));
+
+        setProfileImage(`https://ui-avatars.com/api/?name=${encodeURIComponent(fullName)}&background=f0f9f9&color=0d9488&bold=true&size=200`);
+    }, [currentAdmin]);
+
+    const handleSave = async () => {
+        const payload = {};
+        const trimmedName = profileForm.fullName.trim();
+        const trimmedEmail = profileForm.email.trim();
+        const trimmedCurrentPassword = profileForm.currentPassword.trim();
+        const trimmedNewPassword = profileForm.newPassword.trim();
+        const trimmedConfirmPassword = profileForm.confirmPassword.trim();
+        const isUpdatingPassword = !!(trimmedCurrentPassword || trimmedNewPassword || trimmedConfirmPassword);
+
+        if (trimmedName) {
+            payload.username = trimmedName;
+        }
+
+        if (trimmedEmail) {
+            payload.email = trimmedEmail;
+        }
+
+        if (profileForm.language) {
+            payload.language = profileForm.language;
+        }
+
+        if (isUpdatingPassword) {
+            if (!trimmedCurrentPassword || !trimmedNewPassword || !trimmedConfirmPassword) {
+                notifyError('Enter current password, new password, and confirm password.');
+                return;
+            }
+
+            if (trimmedNewPassword.length < 8) {
+                notifyError('New password must be at least 8 characters long.');
+                return;
+            }
+
+            if (trimmedNewPassword !== trimmedConfirmPassword) {
+                notifyError('New password and confirm password do not match.');
+                return;
+            }
+
+            payload.current_password = trimmedCurrentPassword;
+            payload.new_password = trimmedNewPassword;
+            payload.password_confirmation = trimmedConfirmPassword;
+        }
+
         setIsSaving(true);
-        // Simulate API call
-        setTimeout(() => {
+
+        try {
+            await api.admin.updateCurrentAdmin(payload, adminToken);
+            await refreshCurrentAdmin();
+            resetPasswordFields();
             setIsSaving(false);
             setShowSuccess(true);
+            notifySuccess(isUpdatingPassword ? 'Admin profile and password updated successfully.' : 'Admin profile updated successfully.');
             setTimeout(() => setShowSuccess(false), 3000);
-        }, 800);
+        } catch (err) {
+            setIsSaving(false);
+            notifyError(err.response?.data?.detail || err.response?.data?.message || 'Failed to update admin settings.');
+        }
+    };
+
+    const handleDiscard = () => {
+        const fullName = currentAdmin?.username || currentAdmin?.name || currentAdmin?.email || 'Admin User';
+        const email = currentAdmin?.email || '';
+        const role = currentAdmin?.role || 'System Administrator';
+        const language = currentAdmin?.language || 'English (US)';
+
+        setProfileForm((current) => ({
+            ...current,
+            fullName,
+            email,
+            role,
+            language,
+            currentPassword: '',
+            newPassword: '',
+            confirmPassword: '',
+        }));
+        setShowCurrentPassword(false);
+        setShowNewPassword(false);
+        setShowConfirmPassword(false);
     };
 
     const handleImageChange = (e) => {
@@ -80,7 +178,7 @@ const AccountSettings = () => {
                     <p className="text-slate-500 font-medium text-base">Manage your platform identity and security credentials.</p>
                 </div>
                 <div className="flex items-center gap-3">
-                    <Button variant="outline" className="h-11 px-6 rounded-xl font-bold border-slate-200 text-slate-600 hover:bg-slate-50">
+                    <Button onClick={handleDiscard} variant="outline" className="h-11 px-6 rounded-xl font-bold border-slate-200 text-slate-600 hover:bg-slate-50">
                         Discard
                     </Button>
                     <Button
@@ -128,7 +226,8 @@ const AccountSettings = () => {
                             <div className="space-y-2">
                                 <label className="text-[13px] font-bold text-slate-900 ml-1 uppercase tracking-wider">Full Name</label>
                                 <Input
-                                    defaultValue="Dr. Sarah Chen"
+                                    value={profileForm.fullName}
+                                    onChange={(e) => setProfileForm((current) => ({ ...current, fullName: e.target.value }))}
                                     className="h-14 rounded-2xl bg-slate-50/50 border-slate-100 px-6 font-semibold focus:bg-white transition-all text-slate-700"
                                 />
                             </div>
@@ -139,7 +238,8 @@ const AccountSettings = () => {
                                         <Mail size={18} />
                                     </div>
                                     <Input
-                                        defaultValue="sarah.chen@dentalplatform.com"
+                                        value={profileForm.email}
+                                        onChange={(e) => setProfileForm((current) => ({ ...current, email: e.target.value }))}
                                         className="h-14 rounded-2xl bg-slate-50/50 border-slate-100 pl-14 pr-6 font-semibold focus:bg-white transition-all text-slate-700"
                                     />
                                 </div>
@@ -147,7 +247,12 @@ const AccountSettings = () => {
                             <div className="space-y-2">
                                 <label className="text-[13px] font-bold text-slate-900 ml-1 uppercase tracking-wider">Professional Role</label>
                                 <div className="relative group">
-                                    <select className="w-full h-14 bg-slate-50/50 border border-slate-100 rounded-2xl px-6 font-semibold text-slate-700 focus:bg-white focus:ring-4 focus:ring-[#0d9488]/5 focus:border-[#0d9488] transition-all appearance-none cursor-pointer outline-none">
+                                    <select
+                                        value={profileForm.role}
+                                        onChange={(e) => setProfileForm((current) => ({ ...current, role: e.target.value }))}
+                                        className="w-full h-14 bg-slate-50/50 border border-slate-100 rounded-2xl px-6 font-semibold text-slate-700 focus:bg-white focus:ring-4 focus:ring-[#0d9488]/5 focus:border-[#0d9488] transition-all appearance-none cursor-pointer outline-none"
+                                    >
+                                        <option>System Administrator</option>
                                         <option>Chief Administrator</option>
                                         <option>Clinical Director</option>
                                         <option>Lead Dentist</option>
@@ -160,7 +265,11 @@ const AccountSettings = () => {
                             <div className="space-y-2">
                                 <label className="text-[13px] font-bold text-slate-900 ml-1 uppercase tracking-wider">Language</label>
                                 <div className="relative group">
-                                    <select className="w-full h-14 bg-slate-50/50 border border-slate-100 rounded-2xl px-6 font-semibold text-slate-700 focus:bg-white focus:ring-4 focus:ring-[#0d9488]/5 focus:border-[#0d9488] transition-all appearance-none cursor-pointer outline-none">
+                                    <select
+                                        value={profileForm.language}
+                                        onChange={(e) => setProfileForm((current) => ({ ...current, language: e.target.value }))}
+                                        className="w-full h-14 bg-slate-50/50 border border-slate-100 rounded-2xl px-6 font-semibold text-slate-700 focus:bg-white focus:ring-4 focus:ring-[#0d9488]/5 focus:border-[#0d9488] transition-all appearance-none cursor-pointer outline-none"
+                                    >
                                         <option>English (US)</option>
                                         <option>Spanish (ES)</option>
                                         <option>French (FR)</option>
@@ -199,11 +308,14 @@ const AccountSettings = () => {
                                         <label className="text-[11px] font-bold text-slate-400 ml-1 uppercase tracking-wider">Current Password</label>
                                         <div className="relative group">
                                             <Input
-                                                type={showCurrentPassword ? "text" : "password"}
-                                                defaultValue="password123"
+                                                type={showCurrentPassword ? 'text' : 'password'}
+                                                value={profileForm.currentPassword}
+                                                onChange={(e) => setProfileForm((current) => ({ ...current, currentPassword: e.target.value }))}
+                                                placeholder="Enter current password"
                                                 className="h-12 rounded-xl bg-slate-50/50 border-slate-100 pl-5 pr-12 font-bold tracking-widest text-[#0d9488]"
                                             />
                                             <button
+                                                type="button"
                                                 onClick={() => setShowCurrentPassword(!showCurrentPassword)}
                                                 className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-[#0d9488] transition-colors"
                                             >
@@ -215,11 +327,14 @@ const AccountSettings = () => {
                                         <label className="text-[11px] font-bold text-slate-400 ml-1 uppercase tracking-wider">New Password</label>
                                         <div className="relative group">
                                             <Input
-                                                type={showNewPassword ? "text" : "password"}
-                                                defaultValue="password123"
+                                                type={showNewPassword ? 'text' : 'password'}
+                                                value={profileForm.newPassword}
+                                                onChange={(e) => setProfileForm((current) => ({ ...current, newPassword: e.target.value }))}
+                                                placeholder="Enter new password"
                                                 className="h-12 rounded-xl bg-slate-50/50 border-slate-100 pl-5 pr-12 font-bold tracking-widest text-slate-400"
                                             />
                                             <button
+                                                type="button"
                                                 onClick={() => setShowNewPassword(!showNewPassword)}
                                                 className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-[#0d9488] transition-colors"
                                             >
@@ -231,11 +346,14 @@ const AccountSettings = () => {
                                         <label className="text-[11px] font-bold text-slate-400 ml-1 uppercase tracking-wider">Confirm New Password</label>
                                         <div className="relative group">
                                             <Input
-                                                type={showConfirmPassword ? "text" : "password"}
-                                                defaultValue="password123"
+                                                type={showConfirmPassword ? 'text' : 'password'}
+                                                value={profileForm.confirmPassword}
+                                                onChange={(e) => setProfileForm((current) => ({ ...current, confirmPassword: e.target.value }))}
+                                                placeholder="Confirm new password"
                                                 className="h-12 rounded-xl bg-slate-50/50 border-slate-100 pl-5 pr-12 font-bold tracking-widest text-slate-400"
                                             />
                                             <button
+                                                type="button"
                                                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                                                 className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-[#0d9488] transition-colors"
                                             >

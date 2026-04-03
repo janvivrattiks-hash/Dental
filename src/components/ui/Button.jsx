@@ -1,6 +1,6 @@
 import { cn } from '../../utils/utils';
 
-const Button = ({ children, variant = 'primary', size = 'md', className, ...props }) => {
+const Button = ({ children, variant = 'primary', size = 'md', className, isLoading = false, disabled = false, ...props }) => {
     const variants = {
         primary: 'bg-clinical-blue text-white hover:bg-clinical-blue/90 shadow-sm',
         secondary: 'bg-clinical-teal text-white hover:bg-clinical-teal/90 shadow-sm',
@@ -23,9 +23,15 @@ const Button = ({ children, variant = 'primary', size = 'md', className, ...prop
                 sizes[size],
                 className
             )}
+            disabled={disabled || isLoading}
             {...props}
         >
-            {children}
+            {isLoading ? (
+                <div className="flex items-center gap-2">
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></div>
+                    <span>Loading...</span>
+                </div>
+            ) : children}
         </button>
     );
 };

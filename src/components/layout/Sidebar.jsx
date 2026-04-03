@@ -5,22 +5,25 @@ import {
     BookOpen,
     ClipboardList,
     History,
-    BarChart3,
     Settings,
     LogOut,
     X,
     Users,
-    Building2,
     Microscope
 } from 'lucide-react';
 import { cn } from '../../utils/utils';
 import { useGlobal } from '../../context/GlobalContext';
+import { useContextProvider } from '../../ContextProvider';
 import AddLibraryModal from '../modals/AddLibraryModal';
 
 const Sidebar = ({ isOpen, onClose }) => {
     const location = useLocation();
-    const { user } = useGlobal();
+    const { user, logout } = useGlobal();
+    const { user: currentAdmin } = useContextProvider();
     const [isAddLibraryModalOpen, setIsAddLibraryModalOpen] = useState(false);
+    const displayName = currentAdmin?.username || currentAdmin?.name || currentAdmin?.email || user?.username || user?.email || 'Admin User';
+    const displayRole = currentAdmin?.role || user?.role || 'System Administrator';
+    const avatarName = encodeURIComponent(displayName);
 
     const menuItems = [
         { title: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
@@ -101,19 +104,29 @@ const Sidebar = ({ isOpen, onClose }) => {
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-full bg-[#fef3c7] border-2 border-white shadow-sm flex items-center justify-center overflow-hidden">
                                     <img
-                                        src={`https://ui-avatars.com/api/?name=Sarah+Chen&background=fef3c7&color=92400e&bold=true`}
+                                        src={`https://ui-avatars.com/api/?name=${avatarName}&background=fef3c7&color=92400e&bold=true`}
                                         alt="Admin"
                                         className="w-full h-full rounded-full"
                                     />
                                 </div>
                                 <div className="flex flex-col">
-                                    <span className="text-sm font-bold text-slate-900 leading-none">Dr. Sarah Chen</span>
-                                    <span className="text-[11px] font-medium text-slate-400 mt-1">System Admin</span>
+                                    <span className="text-sm font-bold text-slate-900 leading-none">{displayName}</span>
+                                    <span className="text-[11px] font-medium text-slate-400 mt-1">{displayRole}</span>
                                 </div>
                             </div>
                             <Settings size={18} className="text-slate-400 group-hover:text-slate-600 transition-colors" />
                         </div>
                     </Link>
+                    <button
+                        onClick={() => {
+                            logout();
+                            if (onClose) onClose();
+                        }}
+                        className="mt-4 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-bold text-slate-500 transition-all hover:bg-slate-50 hover:text-rose-500"
+                    >
+                        <LogOut size={18} />
+                        Logout
+                    </button>
                 </div>
             </aside>
 

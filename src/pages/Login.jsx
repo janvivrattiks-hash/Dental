@@ -4,25 +4,47 @@ import { Mail, Lock, Eye, EyeOff, ShieldCheck, Microscope } from 'lucide-react';
 import { useGlobal } from '../context/GlobalContext';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
-import { cn } from '../utils/utils';
+import api from '../Script/api';
 
 const Login = () => {
     const navigate = useNavigate();
     const { setAuth, setUser } = useGlobal();
     const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
+    const [formData, setFormData] = useState({
+        email: '',
+        password: '',
+    });
 
-    const handleLogin = (e) => {
+    const handleLogin = async (e) => {
         e.preventDefault();
+        setError('');
         setIsLoading(true);
 
-        // Simulate login delay
-        setTimeout(() => {
-            setAuth({ isAuthenticated: true, token: 'mock-token' });
-            setUser({ name: 'Admin User', role: 'System Administrator' });
+        try {
+            const response = await api.auth.login(formData.email, formData.password);
+            const payload = response.data || {};
+            const accessToken = payload.access_token || payload.token;
+
+            if (!accessToken) {
+                throw new Error('Access token not received from login API.');
+            }
+
+            const currentUser = {
+                name: payload.user?.username || payload.user?.name || formData.email,
+                role: payload.user?.role || 'System Administrator',
+                email: payload.user?.email || formData.email,
+            };
+
+            setAuth({ isAuthenticated: true, token: accessToken });
+            setUser(currentUser);
             setIsLoading(false);
             navigate('/');
-        }, 400);
+        } catch (err) {
+            setIsLoading(false);
+            setError(err.response?.data?.detail || err.response?.data?.message || err.message || 'Login failed.');
+        }
     };
 
     return (
@@ -48,9 +70,12 @@ const Login = () => {
                             <label className="text-sm font-bold text-slate-800 ml-1">Email Address</label>
                             <Input
                                 type="email"
+                                value={formData.email}
+                                onChange={(e) => setFormData((current) => ({ ...current, email: e.target.value }))}
                                 placeholder="admin@implascan.com"
                                 icon={Mail}
                                 className="bg-slate-50/50 border-slate-200 h-14 rounded-xl focus:bg-white transition-all text-base"
+                                required
                             />
                         </div>
 
@@ -59,9 +84,12 @@ const Login = () => {
                             <div className="relative">
                                 <Input
                                     type={showPassword ? 'text' : 'password'}
+                                    value={formData.password}
+                                    onChange={(e) => setFormData((current) => ({ ...current, password: e.target.value }))}
                                     placeholder="••••••••"
                                     icon={Lock}
                                     className="bg-slate-50/50 border-slate-200 h-14 rounded-xl focus:bg-white transition-all pr-12 text-base"
+                                    required
                                 />
                                 <button
                                     type="button"
@@ -80,6 +108,12 @@ const Login = () => {
                             </label>
                             <button type="button" className="text-sm font-bold text-[#0d9488] hover:underline transition-all">Forgot password?</button>
                         </div>
+
+                        {error ? (
+                            <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-600">
+                                {error}
+                            </div>
+                        ) : null}
 
                         <Button
                             type="submit"

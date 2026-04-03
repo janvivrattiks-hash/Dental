@@ -1,29 +1,38 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
     Users,
     Calendar,
-    DollarSign,
-    Activity,
-    MoreHorizontal,
     Search,
-    Bell,
     Plus,
     CreditCard,
     Download,
     TrendingUp,
     Microscope,
-    Tablet,
-    Settings
+    Tablet
 } from 'lucide-react';
-import StatsCard from '../components/common/StatsCard';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import { cn } from '../utils/utils';
 import AddLibraryModal from '../components/modals/AddLibraryModal';
+import CreatePlanModal from '../components/modals/CreatePlanModal';
+import api from '../Script/api';
+
+const getCollection = (payload) => {
+    if (Array.isArray(payload)) return payload;
+    if (Array.isArray(payload?.items)) return payload.items;
+    if (Array.isArray(payload?.data)) return payload.data;
+    if (Array.isArray(payload?.results)) return payload.results;
+    return [];
+};
 
 const Dashboard = () => {
     const [isAddLibraryModalOpen, setIsAddLibraryModalOpen] = useState(false);
+    const [isCreatePlanModalOpen, setIsCreatePlanModalOpen] = useState(false);
+    const [libraries, setLibraries] = useState([]);
+    const [libraryError, setLibraryError] = useState('');
+    const [planModalError, setPlanModalError] = useState('');
+    const [isSavingPlan, setIsSavingPlan] = useState(false);
     const scanActivity = [
         {
             id: 1,
@@ -70,6 +79,35 @@ const Dashboard = () => {
             avatar: 'SH'
         },
     ];
+
+    const loadLibraries = async () => {
+        setLibraryError('');
+
+        try {
+            const response = await api.libraries.list();
+            setLibraries(getCollection(response.data));
+        } catch (err) {
+            setLibraryError(err.response?.data?.detail || err.response?.data?.message || 'Failed to load libraries.');
+        }
+    };
+
+    useEffect(() => {
+        loadLibraries();
+    }, []);
+
+    const handleCreatePlan = async (payload) => {
+        setPlanModalError('');
+        setIsSavingPlan(true);
+
+        try {
+            await api.plans.create(payload);
+            setIsCreatePlanModalOpen(false);
+        } catch (err) {
+            setPlanModalError(err.response?.data?.detail || err.response?.data?.message || 'Failed to create plan.');
+        } finally {
+            setIsSavingPlan(false);
+        }
+    };
 
     return (
         <div className="p-6 lg:p-10">
@@ -150,7 +188,10 @@ const Dashboard = () => {
                         <Plus size={18} className="p-0.5 bg-slate-100 rounded-md" />
                         Add Library
                     </Button>
-                    <Button className="h-12 lg:h-14 px-6 lg:px-8 bg-white border-slate-100 text-[#0d9488] rounded-xl font-bold flex items-center gap-3 shadow-sm hover:bg-slate-50 transition-all text-sm lg:text-base">
+                    <Button
+                        onClick={() => setIsCreatePlanModalOpen(true)}
+                        className="h-12 lg:h-14 px-6 lg:px-8 bg-white border-slate-100 text-[#0d9488] rounded-xl font-bold flex items-center gap-3 shadow-sm hover:bg-slate-50 transition-all text-sm lg:text-base"
+                    >
                         <Plus size={18} className="p-0.5 bg-slate-100 rounded-md" />
                         Add Plan
                     </Button>
@@ -278,18 +319,19 @@ const Dashboard = () => {
 
                     <div className="pt-10 border-t border-slate-50">
                         <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-8">Top Implant Libraries</h4>
+                        {libraryError ? (
+                            <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-600">
+                                {libraryError}
+                            </div>
+                        ) : null}
                         <div className="space-y-5 lg:space-y-6">
-                            {[
-                                { name: 'Nobel Biocare', count: '4,210', color: 'bg-[#0d9488]' },
-                                { name: 'Straumann', count: '3,890', color: 'bg-[#14b8a6]' },
-                                { name: 'Zimmer Biomet', count: '2,100', color: 'bg-clinical-blue' }
-                            ].map((lib) => (
-                                <div key={lib.name} className="flex items-center justify-between group cursor-pointer hover:bg-slate-50 p-3 lg:p-4 -m-3 lg:-m-4 rounded-xl transition-all">
+                            {(libraries.length ? libraries.slice(0, 3) : [{ id: 'empty-state', company_name: 'No libraries found', manufacturer_id: 'Create one from Add Library' }]).map((lib, index) => (
+                                <div key={lib.id || lib.company_name} className="flex items-center justify-between group cursor-pointer hover:bg-slate-50 p-3 lg:p-4 -m-3 lg:-m-4 rounded-xl transition-all">
                                     <div className="flex items-center gap-3">
-                                        <div className={cn("w-2 h-2 rounded-full", lib.color)}></div>
-                                        <span className="text-sm lg:text-[15px] font-bold text-slate-700 group-hover:text-[#0d9488] transition-colors">{lib.name}</span>
+                                        <div className={cn('w-2 h-2 rounded-full', index === 0 ? 'bg-[#0d9488]' : index === 1 ? 'bg-[#14b8a6]' : 'bg-clinical-blue')}></div>
+                                        <span className="text-sm lg:text-[15px] font-bold text-slate-700 group-hover:text-[#0d9488] transition-colors">{lib.company_name}</span>
                                     </div>
-                                    <span className="text-sm lg:text-[14px] font-extrabold text-slate-900">{lib.count} <span className="text-slate-400 text-xs font-bold">scans</span></span>
+                                    <span className="text-sm lg:text-[14px] font-extrabold text-slate-900">{lib.manufacturer_id || 'No manufacturer id'} <span className="text-slate-400 text-xs font-bold">id</span></span>
                                 </div>
                             ))}
                         </div>
@@ -299,6 +341,18 @@ const Dashboard = () => {
             <AddLibraryModal
                 isOpen={isAddLibraryModalOpen}
                 onClose={() => setIsAddLibraryModalOpen(false)}
+                onSuccess={loadLibraries}
+            />
+            <CreatePlanModal
+                isOpen={isCreatePlanModalOpen}
+                plan={null}
+                onSubmit={handleCreatePlan}
+                isSaving={isSavingPlan}
+                error={planModalError}
+                onClose={() => {
+                    setIsCreatePlanModalOpen(false);
+                    setPlanModalError('');
+                }}
             />
         </div>
     );
