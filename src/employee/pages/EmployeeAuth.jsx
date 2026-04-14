@@ -1,0 +1,117 @@
+import { useMemo, useState } from 'react';
+import { Navigate } from 'react-router-dom';
+import { Lock, Mail, UserRound } from 'lucide-react';
+import { useEmployee } from '../../context/EmployeeContext';
+
+const EmployeeAuth = () => {
+  const [tab, setTab] = useState('login');
+  const { employeeAuth, setEmployeeSession } = useEmployee();
+  const [form, setForm] = useState({
+    fullName: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+  });
+
+  const canRegister = useMemo(() => (
+    form.fullName.trim() &&
+    form.email.trim() &&
+    form.password.length >= 6 &&
+    form.confirmPassword === form.password
+  ), [form]);
+
+  if (employeeAuth.isAuthenticated) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  const submitLogin = (event) => {
+    event.preventDefault();
+    setEmployeeSession(`emp_${Date.now()}`, {
+      name: form.fullName || 'Dr. Alex Morgan',
+      email: form.email,
+      plan: 'Pro',
+    });
+  };
+
+  return (
+    <div className="employee-shell min-h-screen grid lg:grid-cols-2 px-4 py-8 lg:px-16">
+      <section className="hidden lg:flex flex-col justify-center pr-10">
+        <div className="glass-card p-10 relative overflow-hidden">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(0,212,255,0.15),transparent_40%)]" />
+          <h1 className="employee-heading text-4xl text-slate-100 relative">Precision Dental Alignment</h1>
+          <p className="text-slate-300 mt-4 relative">Powered by Advanced 3D Algorithms ✦</p>
+          <div className="mt-8 h-64 rounded-2xl border border-cyan-400/30 bg-gradient-to-br from-cyan-500/10 to-violet-500/10 relative">
+            <div className="absolute inset-0 animate-pulse opacity-70 [background:radial-gradient(circle_at_40%_30%,rgba(0,212,255,0.2),transparent_45%)]" />
+          </div>
+        </div>
+      </section>
+
+      <section className="flex items-center justify-center">
+        <div className="glass-card w-full max-w-[520px] p-6 lg:p-8">
+          <div className="flex gap-2 mb-6">
+            {['login', 'register'].map((currentTab) => (
+              <button
+                key={currentTab}
+                type="button"
+                onClick={() => setTab(currentTab)}
+                className={`px-4 py-2 rounded-full text-sm font-semibold border ${tab === currentTab ? 'bg-cyan-500/20 border-cyan-400/35 text-cyan-200' : 'border-slate-700 text-slate-400'}`}
+              >
+                {currentTab === 'login' ? 'Login' : 'Register'}
+              </button>
+            ))}
+          </div>
+
+          <form className="space-y-4" onSubmit={submitLogin}>
+            {tab === 'register' ? (
+              <div>
+                <label className="text-sm text-slate-300">Full Name</label>
+                <div className="relative mt-1">
+                  <UserRound size={16} className="absolute top-3 left-3 text-slate-500" />
+                  <input className="glass-input h-11 w-full pl-9 pr-3" value={form.fullName} onChange={(event) => setForm((s) => ({ ...s, fullName: event.target.value }))} required />
+                </div>
+              </div>
+            ) : null}
+
+            <div>
+              <label className="text-sm text-slate-300">Email</label>
+              <div className="relative mt-1">
+                <Mail size={16} className="absolute top-3 left-3 text-slate-500" />
+                <input type="email" className="glass-input h-11 w-full pl-9 pr-3" value={form.email} onChange={(event) => setForm((s) => ({ ...s, email: event.target.value }))} required />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-sm text-slate-300">Password</label>
+              <div className="relative mt-1">
+                <Lock size={16} className="absolute top-3 left-3 text-slate-500" />
+                <input type="password" className="glass-input h-11 w-full pl-9 pr-3" value={form.password} onChange={(event) => setForm((s) => ({ ...s, password: event.target.value }))} required />
+              </div>
+            </div>
+
+            {tab === 'register' ? (
+              <div>
+                <label className="text-sm text-slate-300">Confirm Password</label>
+                <input type="password" className="glass-input h-11 w-full px-3 mt-1" value={form.confirmPassword} onChange={(event) => setForm((s) => ({ ...s, confirmPassword: event.target.value }))} required />
+              </div>
+            ) : null}
+
+            <div className="flex items-center justify-between text-sm text-slate-400 pt-1">
+              <span>{tab === 'login' ? 'Forgot Password?' : 'Create secure access'}</span>
+              <span className="text-cyan-300">Help</span>
+            </div>
+
+            <button
+              type="submit"
+              disabled={tab === 'register' && !canRegister}
+              className="gradient-btn h-11 w-full text-slate-950 font-semibold disabled:opacity-40"
+            >
+              {tab === 'login' ? 'Sign In' : 'Create Account'}
+            </button>
+          </form>
+        </div>
+      </section>
+    </div>
+  );
+};
+
+export default EmployeeAuth;

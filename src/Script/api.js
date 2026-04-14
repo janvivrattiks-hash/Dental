@@ -123,6 +123,10 @@ const api = {
         uploadAsset: async (libraryId, payload) => apiService.postMultipart(`/admin/libraries/${libraryId}/assets`, payload),
     },
 
+    all_libraries: {
+        list: async () => apiService.get('/admin/all_libraries'),
+    },
+
     plans: {
         list: async (params) => apiService.get('/plans', params),
         get: async (planId) => apiService.get(`/plans/${planId}`),

@@ -1,16 +1,31 @@
-# React + Vite
+# MyPathFinder Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+## Routing split
 
-Currently, two official plugins are available:
+- Employee panel: open on `http://localhost:5173/`
+- Admin panel: open on `http://admin.localhost:5173/login`
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+The app now uses host-based routing:
 
-## React Compiler
+- `admin.*` hosts render the existing admin portal
+- all other hosts render the employee panel
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Local setup for admin host
 
-## Expanding the ESLint configuration
+Add this entry in your local hosts file:
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+```txt
+127.0.0.1 admin.localhost
+```
+
+Then run:
+
+```bash
+npm install
+npm run dev
+```
+
+Now you can test both panels:
+
+- `http://localhost:5173/` (employee)
+- `http://admin.localhost:5173/login` (admin)
