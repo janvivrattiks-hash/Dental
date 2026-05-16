@@ -2,16 +2,13 @@ import { useMemo, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { Lock, Mail, UserRound } from 'lucide-react';
 import { useEmployee } from '../../context/EmployeeContext';
+import api, { notifyError, notifySuccess } from '../../Script/api';
 
 const EmployeeAuth = () => {
   const [tab, setTab] = useState('login');
   const { employeeAuth, setEmployeeSession } = useEmployee();
-  const [form, setForm] = useState({
-    fullName: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-  });
+  const [form, setForm] = useState({ fullName: '', email: '', password: '', confirmPassword: '' });
+  const [loading, setLoading] = useState(false);
 
   const canRegister = useMemo(() => (
     form.fullName.trim() &&
@@ -24,13 +21,49 @@ const EmployeeAuth = () => {
     return <Navigate to="/dashboard" replace />;
   }
 
-  const submitLogin = (event) => {
+  const submitLogin = async (event) => {
     event.preventDefault();
-    setEmployeeSession(`emp_${Date.now()}`, {
-      name: form.fullName || 'Dr. Alex Morgan',
-      email: form.email,
-      plan: 'Pro',
-    });
+    setLoading(true);
+    try {
+      const res = await api.employee.auth.login({ email: form.email, password: form.password });
+      const { access_token, user } = res.data?.data || res.data;
+      setEmployeeSession(access_token, {
+        name: user.full_name || user.email,
+        email: user.email,
+        plan: user.active_plan || 'free',
+      });
+      notifySuccess('Welcome back!');
+    } catch (err) {
+      const msg = err?.response?.data?.detail || 'Login failed. Please check your credentials.';
+      notifyError(typeof msg === 'string' ? msg : 'Login failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const submitRegister = async (event) => {
+    event.preventDefault();
+    if (!canRegister) return;
+    setLoading(true);
+    try {
+      const res = await api.employee.auth.register({
+        full_name: form.fullName,
+        email: form.email,
+        password: form.password,
+      });
+      const { access_token, user } = res.data?.data || res.data;
+      setEmployeeSession(access_token, {
+        name: user.full_name || user.email,
+        email: user.email,
+        plan: user.active_plan || 'free',
+      });
+      notifySuccess('Account created successfully!');
+    } catch (err) {
+      const msg = err?.response?.data?.detail || 'Registration failed.';
+      notifyError(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -61,13 +94,13 @@ const EmployeeAuth = () => {
             ))}
           </div>
 
-          <form className="space-y-4" onSubmit={submitLogin}>
+          <form className="space-y-4" onSubmit={tab === 'login' ? submitLogin : submitRegister}>
             {tab === 'register' ? (
               <div>
                 <label className="text-sm text-slate-300">Full Name</label>
                 <div className="relative mt-1">
                   <UserRound size={16} className="absolute top-3 left-3 text-slate-500" />
-                  <input className="glass-input h-11 w-full pl-9 pr-3" value={form.fullName} onChange={(event) => setForm((s) => ({ ...s, fullName: event.target.value }))} required />
+                  <input className="glass-input h-11 w-full pl-9 pr-3" value={form.fullName} onChange={(e) => setForm((s) => ({ ...s, fullName: e.target.value }))} required />
                 </div>
               </div>
             ) : null}
@@ -76,7 +109,7 @@ const EmployeeAuth = () => {
               <label className="text-sm text-slate-300">Email</label>
               <div className="relative mt-1">
                 <Mail size={16} className="absolute top-3 left-3 text-slate-500" />
-                <input type="email" className="glass-input h-11 w-full pl-9 pr-3" value={form.email} onChange={(event) => setForm((s) => ({ ...s, email: event.target.value }))} required />
+                <input type="email" className="glass-input h-11 w-full pl-9 pr-3" value={form.email} onChange={(e) => setForm((s) => ({ ...s, email: e.target.value }))} required />
               </div>
             </div>
 
@@ -84,14 +117,14 @@ const EmployeeAuth = () => {
               <label className="text-sm text-slate-300">Password</label>
               <div className="relative mt-1">
                 <Lock size={16} className="absolute top-3 left-3 text-slate-500" />
-                <input type="password" className="glass-input h-11 w-full pl-9 pr-3" value={form.password} onChange={(event) => setForm((s) => ({ ...s, password: event.target.value }))} required />
+                <input type="password" className="glass-input h-11 w-full pl-9 pr-3" value={form.password} onChange={(e) => setForm((s) => ({ ...s, password: e.target.value }))} required />
               </div>
             </div>
 
             {tab === 'register' ? (
               <div>
                 <label className="text-sm text-slate-300">Confirm Password</label>
-                <input type="password" className="glass-input h-11 w-full px-3 mt-1" value={form.confirmPassword} onChange={(event) => setForm((s) => ({ ...s, confirmPassword: event.target.value }))} required />
+                <input type="password" className="glass-input h-11 w-full px-3 mt-1" value={form.confirmPassword} onChange={(e) => setForm((s) => ({ ...s, confirmPassword: e.target.value }))} required />
               </div>
             ) : null}
 
@@ -102,10 +135,10 @@ const EmployeeAuth = () => {
 
             <button
               type="submit"
-              disabled={tab === 'register' && !canRegister}
+              disabled={(tab === 'register' && !canRegister) || loading}
               className="gradient-btn h-11 w-full text-slate-950 font-semibold disabled:opacity-40"
             >
-              {tab === 'login' ? 'Sign In' : 'Create Account'}
+              {loading ? 'Please wait...' : tab === 'login' ? 'Sign In' : 'Create Account'}
             </button>
           </form>
         </div>

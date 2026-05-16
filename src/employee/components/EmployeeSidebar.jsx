@@ -16,6 +16,12 @@ const EmployeeSidebar = () => {
   const { pathname } = useLocation();
   const { employeeUser, logoutEmployee } = useEmployee();
 
+  // Derive display values from persisted user object (never falls back to hard-coded defaults)
+  const displayName = employeeUser?.name || employeeUser?.email || '—';
+  const displayPlan = employeeUser?.plan
+    ? employeeUser.plan.charAt(0).toUpperCase() + employeeUser.plan.slice(1).toLowerCase()
+    : 'Free';
+
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-[240px] border-r border-cyan-400/20 bg-[#050B18] p-4 lg:flex flex-col">
       <div className="glass-card px-3 py-4 mb-4 shrink-0">
@@ -42,7 +48,14 @@ const EmployeeSidebar = () => {
                   : 'border-transparent text-slate-300 hover:border-cyan-400/20 hover:bg-cyan-500/5'
               )}
             >
-              <item.icon size={18} className={cn(active ? 'text-cyan-300 drop-shadow-[0_0_8px_rgba(0,212,255,.6)]' : 'text-slate-400 group-hover:text-cyan-300')} />
+              <item.icon
+                size={18}
+                className={cn(
+                  active
+                    ? 'text-cyan-300 drop-shadow-[0_0_8px_rgba(0,212,255,.6)]'
+                    : 'text-slate-400 group-hover:text-cyan-300'
+                )}
+              />
               <span className="text-sm font-medium">{item.label}</span>
             </Link>
           );
@@ -52,12 +65,12 @@ const EmployeeSidebar = () => {
       <div className="mt-auto pt-4 space-y-3 shrink-0">
         <div className="glass-card p-3">
           <div className="flex items-center gap-2">
-            <div className="h-9 w-9 rounded-full bg-cyan-500/20 border border-cyan-400/30 flex items-center justify-center">
+            <div className="h-9 w-9 rounded-full bg-cyan-500/20 border border-cyan-400/30 flex items-center justify-center shrink-0">
               <BriefcaseMedical size={16} className="text-cyan-300" />
             </div>
             <div className="min-w-0">
-              <p className="text-sm text-slate-200 truncate">{employeeUser.name}</p>
-              <p className="text-xs text-slate-400">{employeeUser.plan} Plan</p>
+              <p className="text-sm text-slate-200 truncate">{displayName}</p>
+              <p className="text-xs text-slate-400">{displayPlan} Plan</p>
             </div>
           </div>
         </div>

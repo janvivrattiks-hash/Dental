@@ -1,0 +1,112 @@
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+
+const today = () => new Date().toISOString().split('T')[0];
+
+const DEFAULT_PATIENT = { fullName: '', age: '', caseDate: today(), notes: '' };
+
+export const useCaseStore = create(
+  persist(
+    (set, get) => ({
+      // ── Workflow ─────────────────────────────────────────────────────────────
+      currentStep: 1,
+
+      // ── Patient / Case ───────────────────────────────────────────────────────
+      patientData: DEFAULT_PATIENT,
+      caseId: null,    // backend UUID
+      caseRef: null,   // human readable PF-XXXX
+
+      // ── Teeth ────────────────────────────────────────────────────────────────
+      selectedTeeth: [],
+      activeTooth: null,
+
+      // Per-tooth in-progress selections (shown in dropdowns while picking)
+      toothBrandSelections: {},
+      toothAngleSelections: {},  // { toothNumber: angleValue (float) | null }
+
+      // Final confirmed assignment per tooth
+      // { [toothNumber]: { company_name, library_id, angle_alignment, manufacturer_id } }
+      toothAssignments: {},
+
+      // ── Actions ──────────────────────────────────────────────────────────────
+      setStep: (step) => set({ currentStep: step }),
+
+      setPatientData: (data) => set({ patientData: data }),
+
+      setCaseCreated: (caseId, caseRef) => set({ caseId, caseRef }),
+
+      toggleTooth: (tooth) =>
+        set((s) => {
+          const exists = s.selectedTeeth.includes(tooth);
+          const next = exists
+            ? s.selectedTeeth.filter((t) => t !== tooth)
+            : [...s.selectedTeeth, tooth];
+          const activeTooth = exists
+            ? s.activeTooth === tooth
+              ? next[0] ?? null
+              : s.activeTooth
+            : s.activeTooth ?? tooth;
+          return { selectedTeeth: next, activeTooth };
+        }),
+
+      setActiveTooth: (tooth) => set({ activeTooth: tooth }),
+
+      setToothBrand: (tooth, brand) =>
+        set((s) => ({
+          toothBrandSelections: { ...s.toothBrandSelections, [tooth]: brand },
+          // Reset angle when brand changes
+          toothAngleSelections: { ...s.toothAngleSelections, [tooth]: null },
+        })),
+
+      setToothAngle: (tooth, angle) =>
+        set((s) => ({
+          toothAngleSelections: { ...s.toothAngleSelections, [tooth]: angle },
+        })),
+
+      assignLibrary: (toothNumber, assignment) =>
+        set((s) => ({
+          toothAssignments: { ...s.toothAssignments, [toothNumber]: assignment },
+        })),
+
+      removeAssignment: (toothNumber) =>
+        set((s) => {
+          const next = { ...s.toothAssignments };
+          delete next[toothNumber];
+          return { toothAssignments: next };
+        }),
+
+      clearTeeth: () =>
+        set({
+          selectedTeeth: [], activeTooth: null,
+          toothBrandSelections: {}, toothAngleSelections: {}, toothAssignments: {},
+        }),
+
+      resetCase: () =>
+        set({
+          currentStep: 1,
+          patientData: { ...DEFAULT_PATIENT, caseDate: today() },
+          caseId: null,
+          caseRef: null,
+          selectedTeeth: [],
+          activeTooth: null,
+          toothBrandSelections: {},
+          toothAngleSelections: {},
+          toothAssignments: {},
+        }),
+    }),
+    {
+      name: 'mpf-employee-case',
+      partialize: (s) => ({
+        currentStep: s.currentStep,
+        patientData: s.patientData,
+        caseId: s.caseId,
+        caseRef: s.caseRef,
+        selectedTeeth: s.selectedTeeth,
+        activeTooth: s.activeTooth,
+        toothBrandSelections: s.toothBrandSelections,
+        toothAngleSelections: s.toothAngleSelections,
+        toothAssignments: s.toothAssignments,
+      }),
+    }
+  )
+);

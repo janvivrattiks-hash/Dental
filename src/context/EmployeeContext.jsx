@@ -1,49 +1,47 @@
-import { createContext, useContext, useMemo, useState } from 'react';
+import { createContext, useContext, useMemo } from 'react';
+import { useAuthStore } from '../store/authStore';
 
-const EMPLOYEE_TOKEN_KEY = 'employee_token';
+/**
+ * EmployeeContext is now a thin wrapper over the Zustand authStore.
+ * All state is persisted in localStorage via Zustand's persist middleware,
+ * so user data survives page refreshes without any extra work.
+ *
+ * Public interface is intentionally unchanged so existing consumers
+ * (Sidebar, Topbar, Layout, Auth page) need no modifications.
+ */
 const EmployeeContext = createContext();
 
-const defaultUser = {
-  name: 'Dr. Alex Morgan',
-  email: 'doctor@example.com',
-  plan: 'Free',
-};
-
 export const EmployeeProvider = ({ children }) => {
-  const [token, setToken] = useState(sessionStorage.getItem(EMPLOYEE_TOKEN_KEY));
-  const [user, setUser] = useState(defaultUser);
+  const { token, user, setSession, logout, updateUser } = useAuthStore();
 
-  const setEmployeeSession = (nextToken, nextUser = defaultUser) => {
-    setToken(nextToken);
-    setUser(nextUser);
+  const setEmployeeSession = (nextToken, nextUser) => {
     if (nextToken) {
-      sessionStorage.setItem(EMPLOYEE_TOKEN_KEY, nextToken);
+      setSession(nextToken, nextUser ?? { name: '', email: '', plan: 'free' });
     } else {
-      sessionStorage.removeItem(EMPLOYEE_TOKEN_KEY);
+      logout();
     }
   };
 
-  const logoutEmployee = () => {
-    setEmployeeSession(null, defaultUser);
-  };
-
-  const value = useMemo(() => ({
-    employeeAuth: {
-      isAuthenticated: Boolean(token),
-      token,
-    },
-    employeeUser: user,
-    setEmployeeSession,
-    logoutEmployee,
-  }), [token, user]);
+  const value = useMemo(
+    () => ({
+      employeeAuth: {
+        isAuthenticated: Boolean(token),
+        token,
+      },
+      employeeUser: user ?? { name: '', email: '', plan: 'free' },
+      setEmployeeSession,
+      logoutEmployee: logout,
+      updateEmployeeUser: updateUser,
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [token, user]
+  );
 
   return <EmployeeContext.Provider value={value}>{children}</EmployeeContext.Provider>;
 };
 
 export const useEmployee = () => {
-  const context = useContext(EmployeeContext);
-  if (!context) {
-    throw new Error('useEmployee must be used within EmployeeProvider');
-  }
-  return context;
+  const ctx = useContext(EmployeeContext);
+  if (!ctx) throw new Error('useEmployee must be used within EmployeeProvider');
+  return ctx;
 };
