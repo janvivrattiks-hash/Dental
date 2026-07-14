@@ -7,7 +7,15 @@ const API_BASE_URL =
         : import.meta.env.VITE_BASE_URL_DEVELOPMENT;
 
 const FALLBACK_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
-const RESOLVED_BASE_URL = API_BASE_URL || FALLBACK_BASE_URL;
+export const RESOLVED_BASE_URL = API_BASE_URL || FALLBACK_BASE_URL;
+
+// Backend error `detail` is inconsistently shaped: a plain string for most
+// validation errors, or a `{code, message}` dict for alignment-job failures
+// (see analysis/alignment routers) — this normalizes both to display text.
+export const extractErrorMessage = (err, fallback) => {
+    const detail = err?.response?.data?.detail;
+    return (typeof detail === 'object' ? detail?.message : detail) || fallback;
+};
 
 const apiClient = axios.create({
     baseURL: RESOLVED_BASE_URL,
@@ -133,6 +141,110 @@ export const employeeService = {
     },
 };
 
+// ── Pathfinder (scan-body alignment) API ─────────────────────────────────────
+// Ported from the standalone `pathfinder` frontend (originally raw `fetch` +
+// VITE_API_BASE). Re-implemented on top of `employeeService` (axios) so every
+// call carries the employee bearer token and hits RESOLVED_BASE_URL. The
+// backend surface is the interactive alignment API: /api/jobs, /api/vendors,
+// plus per-instance operations. Each function returns the parsed JSON body
+// (axios `res.data`) to match the shapes the ported components expect.
+
+// Create an alignment job: uploads the scene mesh (STL/PLY/OBJ) and one or more
+// vendor selections. `vendor_id` is repeated once per vendor (FastAPI decodes
+// repeated form keys into a list[str]), so the FormData is built by hand rather
+// than via postMultipart (which can't emit duplicate keys).
+export const createJob = async (sceneFile, vendorIds) => {
+    const form = new FormData();
+    form.append('scene', sceneFile);
+    (Array.isArray(vendorIds) ? vendorIds : [vendorIds]).forEach((id) => {
+        if (id) form.append('vendor_id', id);
+    });
+    const res = await employeeService.post('/api/jobs', form);
+    return res.data;
+};
+
+// Replace one instance's SCAN BODY with another registered vendor's. Scan-body
+// + display/export-only: the backend rewrites aligned_instance_NN.stl (+ scene
+// composite) and stores the override as scan_body_vendor_id. Computation
+// vendor, analog STLs, correctors, and angle_results are untouched — no
+// recalculation needed afterward.
+export const setInstanceVendor = async (jobId, instanceIndex, vendorId) => {
+    const res = await employeeService.post(
+        `/api/jobs/${jobId}/instances/${instanceIndex}/vendor`,
+        { vendor_id: vendorId },
+        { headers: { 'Content-Type': 'application/json' } }
+    );
+    return res.data;
+};
+
+// Full registry of vendors ([{id, name, description}]) — NOT job-scoped.
+export const listVendors = async () => {
+    const res = await employeeService.get('/api/vendors');
+    return res.data?.vendors || [];
+};
+
+// Admin library company names shaped like the pathfinder vendor list
+// ({id, name}) so the ported UI (UploadForm presets + per-instance scan-body
+// dropdowns) can consume them in place of the /api/vendors endpoint.
+export const listCompanyVendors = async () => {
+    const res = await employeeService.get('/admin/brands');
+    const raw = res.data?.data ?? res.data ?? [];
+    return raw.map((b) =>
+        typeof b === 'string'
+            ? { id: b, name: b }
+            : { id: b.id ?? b.company_name ?? b.name, name: b.company_name ?? b.name ?? b.id }
+    );
+};
+
+// Set the per-instance z-axis rotation (clocking). One angle clocks BOTH analog
+// STLs (pure + with-scan-body) plus the cube+analogs composite. Does NOT
+// invalidate angle_results or corrector_results.
+export const rotateAnalog = async (jobId, instanceIndex, angleDeg) => {
+    const res = await employeeService.post(
+        `/api/jobs/${jobId}/instances/${instanceIndex}/rotate-analog`,
+        { angle_deg: angleDeg },
+        { headers: { 'Content-Type': 'application/json' } }
+    );
+    return res.data;
+};
+
+export const getJob = async (jobId) => {
+    const res = await employeeService.get(`/api/jobs/${jobId}`);
+    return res.data;
+};
+
+// Trigger post-processing to calculate insertion angles and generate the final composite.
+export const calculateAngles = async (jobId) => {
+    const res = await employeeService.post(`/api/jobs/${jobId}/calculate-angles`);
+    return res.data;
+};
+
+// User-guided targeted search for a missed instance. The user clicks a 3D point
+// in the viewer; this runs constrained registration in a sphere around it.
+// Returns { accepted, instance?, reason?, angle_results_invalidated }.
+export const searchAroundPoint = async (jobId, x, y, z, searchRadius = null, vendorId = null) => {
+    const body = { x, y, z };
+    if (searchRadius !== null && searchRadius !== undefined) body.search_radius = searchRadius;
+    if (vendorId) body.vendor_id = vendorId;
+    const res = await employeeService.post(`/api/jobs/${jobId}/search-around-point`, body, {
+        headers: { 'Content-Type': 'application/json' },
+    });
+    return res.data;
+};
+
+// Remove a wrongly-placed instance (false positive). Invalidates angle_results.
+export const deleteInstance = async (jobId, instanceIndex) => {
+    const res = await employeeService.delete(`/api/jobs/${jobId}/instances/${instanceIndex}`);
+    return res.data;
+};
+
+// Place pre-modeled angle-corrector STLs on each analog instance. Requires
+// calculateAngles() to have been called first.
+export const placeAngleCorrectors = async (jobId) => {
+    const res = await employeeService.post(`/api/jobs/${jobId}/place-angle-correctors`);
+    return res.data;
+};
+
 const api = {
     auth: {
         login: async (email, password) => apiService.postForm('/admin/auth/login', {
@@ -154,6 +266,9 @@ const api = {
                 'Content-Type': 'application/json',
             },
         } : {}),
+        // Admin-only aggregations (admin-token scoped)
+        dashboardStats: async () => apiService.get('/admin/stats'),
+        listUsers: async (params) => apiService.get('/admin/users', params),
     },
 
     libraries: {
@@ -195,6 +310,19 @@ const api = {
         remove: async (subscriptionId) => apiService.delete(`/subscriptions/${subscriptionId}`),
     },
 
+    // ── Pathfinder (scan-body alignment) ──────────────────────────────────────
+    pathfinder: {
+        createJob,
+        setInstanceVendor,
+        listVendors,
+        rotateAnalog,
+        getJob,
+        calculateAngles,
+        searchAroundPoint,
+        deleteInstance,
+        placeAngleCorrectors,
+    },
+
     // ── Employee / User Panel ─────────────────────────────────────────────────
     employee: {
         auth: {
@@ -228,6 +356,9 @@ const api = {
         analysis: {
             calculate: async (caseId) => employeeService.post(`/user/analysis/calculate/${caseId}`),
             results: async (caseId) => employeeService.get(`/user/analysis/${caseId}/results`),
+        },
+        alignment: {
+            status: async (caseId) => employeeService.get(`/user/cases/${caseId}/alignment/status`),
         },
         subscription: {
             myPlan: async () => employeeService.get('/user/subscription/my-plan'),

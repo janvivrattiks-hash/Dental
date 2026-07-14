@@ -21,6 +21,7 @@ const ToleranceConfig = lazy(() => import('./pages/ToleranceConfig'));
 const UserManagement = lazy(() => import('./pages/UserManagement'));
 const Billing = lazy(() => import('./pages/Billing'));
 const UpdateLibrary = lazy(() => import('./pages/UpdateLibrary'));
+const LibraryManagement = lazy(() => import('./pages/LibraryManagement'));
 const SubscriptionPlans = lazy(() => import('./pages/SubscriptionPlans'));
 const AccountSettings = lazy(() => import('./pages/AccountSettings'));
 
@@ -47,8 +48,8 @@ const AdminAppRouter = () => {
               <Route index element={<Navigate to="/dashboard" replace />} />
               <Route path="dashboard" element={<Dashboard />} />
               <Route path="users" element={<UserManagement />} />
-              <Route path="library" element={<Dashboard />} />
-              <Route path="library/edit" element={<UpdateLibrary />} />
+              <Route path="library" element={<LibraryManagement />} />
+              <Route path="library/edit/:id" element={<UpdateLibrary />} />
               <Route path="payments" element={<Billing />} />
               <Route path="plans" element={<SubscriptionPlans />} />
               <Route path="settings" element={<AccountSettings />} />

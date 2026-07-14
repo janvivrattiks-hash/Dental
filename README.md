@@ -27,5 +27,5 @@ npm run dev
 
 Now you can test both panels:
 
-- `http://localhost:5173/` (employee)
-- `http://admin.localhost:5173/login` (admin)
+- `http://localhost:5174/` (employee)
+- `http://admin.localhost:5174/login` (admin)

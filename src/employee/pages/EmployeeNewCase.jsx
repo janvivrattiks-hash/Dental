@@ -4,9 +4,13 @@ import { FileUp, Lock, Search, Sparkles, Trash2, UploadCloud, X } from 'lucide-r
 import StepProgress from '../components/StepProgress';
 import ToothChart from '../components/ToothChart';
 import ScanPreview3D from '../components/ScanPreview3D';
+import ResultsViewer3D from '../components/ResultsViewer3D';
+// PATHFINDER INTEGRATION: after Step 1 (New Case → Next), the scan-body
+// alignment workflow ported from the standalone `pathfinder` app takes over.
+import PathfinderWorkflow from '../pathfinder/PathfinderWorkflow';
 import { useCaseStore } from '../../store/caseStore';
 import { useLibraryData } from '../../hooks/useLibraryData';
-import api, { notifyError, notifySuccess } from '../../Script/api';
+import api, { extractErrorMessage, notifyError, notifySuccess, RESOLVED_BASE_URL } from '../../Script/api';
 
 const MB = 1024 * 1024;
 const fileSizeInMb = (size) => `${(size / MB).toFixed(2)} MB`;
@@ -44,6 +48,12 @@ const AlertBanner = ({ msg, variant = 'amber' }) => {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
+// PATHFINDER INTEGRATION: our original Steps 2–5 (upload / library assignment /
+// superimpose / results / download) are replaced by the ported PathfinderWorkflow
+// once the user leaves Step 1. This flag disables their JSX below while keeping
+// the code intact for reference / rollback. Flip to `true` to restore them.
+const SHOW_LEGACY_STEPS = false;
+
 const EmployeeNewCase = () => {
   const navigate = useNavigate();
 
@@ -79,17 +89,26 @@ const EmployeeNewCase = () => {
   const [upload, setUpload] = useState(null);          // File object — can't persist
   const [uploadingToBackend, setUploadingToBackend] = useState(false);
   const [wireframeMode, setWireframeMode] = useState(false);
+  const [orthographicMode, setOrthographicMode] = useState(false);
 
   const [savingFinal, setSavingFinal] = useState(false);
   const [savedRef, setSavedRef] = useState(null);
   const [superimposed, setSuperimposed] = useState(false);
 
+  // ── Analysis (Steps 3–4) — ephemeral, not persisted in caseStore ─────────
+  const [caseData, setCaseData] = useState(null);               // api.employee.cases.get(caseId) — for patient_scan_url
+  const [analysisResult, setAnalysisResult] = useState(null);    // AnalysisDetailResponse.data
+  const [analysisLoading, setAnalysisLoading] = useState(false); // true while calculate() runs
+  const [analysisError, setAnalysisError] = useState('');
+  const [meshVisibility, setMeshVisibility] = useState({ patientScan: true, scanBody: true, analog: true });
+  const [activeResultTooth, setActiveResultTooth] = useState(null);
+
   // ── Library cascade (Brand → Angle → Libraries) ───────────────────────────
   const {
     brands, brandsLoading, brandsError, fetchBrands,
-    angles, anglesLoading, anglesError, activeBrand,
+    angles, anglesLoading, anglesError,
     fetchAnglesForBrand,
-    displayedLibraries, activeAngle, selectAngle,
+    displayedLibraries, selectAngle,
     restoreForTooth,
   } = useLibraryData();
 
@@ -108,6 +127,40 @@ const EmployeeNewCase = () => {
   useEffect(() => {
     if (currentStep === 2) fetchBrands();
   }, [currentStep, fetchBrands]);
+
+  // Rehydrate case + analysis data after a refresh or direct navigation to
+  // Step 3/4 — never re-runs the (backend-synchronous) calculate() call,
+  // only refetches what already exists.
+  useEffect(() => {
+    if (currentStep < 3 || !caseId || analysisResult) return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const caseRes = await api.employee.cases.get(caseId);
+        if (!cancelled) setCaseData(caseRes.data?.data || caseRes.data);
+      } catch {
+        // Non-fatal — viewer just won't show the base patient scan
+      }
+
+      try {
+        const res = await api.employee.analysis.results(caseId);
+        if (!cancelled) {
+          setAnalysisResult(res.data?.data || res.data);
+          setSuperimposed(true);
+        }
+      } catch (err) {
+        // 404 just means analysis hasn't been run yet — not an error state
+        if (!cancelled && err?.response?.status !== 404) {
+          notifyError(extractErrorMessage(err, 'Failed to load analysis results'));
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentStep, caseId, analysisResult]);
 
   // Restore persisted patient data on first mount only
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -130,6 +183,25 @@ const EmployeeNewCase = () => {
   }, [patient]);
 
   const canGoToStep3 = Boolean(upload) && selectedTeeth.length > 0 && allAssigned;
+
+  const patientScanUrl = caseData?.patient_scan_url
+    ? `${RESOLVED_BASE_URL}${caseData.patient_scan_url}`
+    : null;
+
+  const avgFitnessPct = analysisResult?.results?.length
+    ? Math.round(
+        (analysisResult.results.reduce((sum, r) => sum + (r.fitness_score || 0), 0) / analysisResult.results.length) * 100
+      )
+    : null;
+
+  // Match each analysis result row to the tooth that was assigned to that
+  // vendor's library (results carry `tooth_number`, assigned client-side by
+  // the backend when it matched detected instances to teeth).
+  const resultByTooth = useMemo(() => {
+    const map = {};
+    (analysisResult?.results || []).forEach((r) => { map[r.tooth_number] = r; });
+    return map;
+  }, [analysisResult]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
@@ -162,8 +234,7 @@ const EmployeeNewCase = () => {
       }
       setStep(2);
     } catch (err) {
-      const msg = err?.response?.data?.detail;
-      notifyError(typeof msg === 'object' ? msg?.message : (msg || 'Failed to create case'));
+      notifyError(extractErrorMessage(err, 'Failed to create case'));
     } finally {
       setSavingStep1(false);
     }
@@ -229,9 +300,73 @@ const EmployeeNewCase = () => {
     }
   };
 
-  const handleNextFromStep2 = () => {
+  const handleNextFromStep2 = async () => {
     if (!canGoToStep3) return;
+    // Analysis (Step 3) requires the case's tooth↔library assignments to
+    // already exist server-side — sync them now instead of waiting for the
+    // final Step 5 save, which happens too late for `analysis.calculate` to see them.
+    if (caseId) {
+      const teeth = selectedTeeth.map((tooth) => ({
+        tooth_number: tooth,
+        library_id: toothAssignments[tooth]?.library_id ?? null,
+      }));
+      try {
+        await api.employee.cases.addTeeth(caseId, teeth);
+      } catch (err) {
+        notifyError(extractErrorMessage(err, 'Failed to save teeth assignments'));
+        return;
+      }
+    }
     goToStep(3);
+  };
+
+  // The alignment vendor call is async: submitting a job just starts it
+  // (status "aligning"/"queued"), and analysis.calculate needs it to reach
+  // "awaiting_review" before it can run. On a brand-new case the first
+  // calculate() call is what lazily submits the job, so that very call
+  // reliably 409s with job_not_ready — poll status and retry once it's ready
+  // instead of surfacing that as a hard failure.
+  const isJobNotReady = (err) => err?.response?.data?.detail?.code === 'job_not_ready';
+
+  const pollAlignmentUntilReady = async (id, { intervalMs = 2000, timeoutMs = 120000 } = {}) => {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+      const res = await api.employee.alignment.status(id);
+      const status = (res.data?.data || res.data)?.status;
+      if (status === 'awaiting_review') return;
+      if (status === 'failed') throw new Error('Alignment job failed. Please re-upload the scan and try again.');
+    }
+    throw new Error('Alignment is taking longer than expected. Please try again shortly.');
+  };
+
+  const handleProcessSuperimposition = async () => {
+    if (!caseId) return;
+    setAnalysisLoading(true);
+    setAnalysisError('');
+    try {
+      if (!caseData) {
+        const caseRes = await api.employee.cases.get(caseId);
+        setCaseData(caseRes.data?.data || caseRes.data);
+      }
+      let res;
+      try {
+        res = await api.employee.analysis.calculate(caseId);
+      } catch (err) {
+        if (!isJobNotReady(err)) throw err;
+        await pollAlignmentUntilReady(caseId);
+        res = await api.employee.analysis.calculate(caseId);
+      }
+      setAnalysisResult(res.data?.data || res.data);
+      setSuperimposed(true);
+      notifySuccess('Superimposition complete');
+    } catch (err) {
+      setAnalysisError(
+        err?.response ? extractErrorMessage(err, 'Superimposition failed. Please try again.') : (err.message || 'Superimposition failed. Please try again.')
+      );
+    } finally {
+      setAnalysisLoading(false);
+    }
   };
 
   const handleFinalSave = async () => {
@@ -254,23 +389,29 @@ const EmployeeNewCase = () => {
         }
       }
 
-      // Persist teeth assignments
+      // Persist teeth assignments — normally already synced at the Step 2→3
+      // transition (required for analysis.calculate to see them), so only do
+      // it here as a fallback for the "skipped step 1" path above. addTeeth
+      // isn't idempotent server-side (always inserts), so guard against
+      // re-adding rows that already exist.
       const finalCaseId = caseId || activeCaseId;
       const teeth = selectedTeeth.map((tooth) => ({
         tooth_number: tooth,
         library_id: toothAssignments[tooth]?.library_id ?? null,
       }));
       if (teeth.length) {
-        await api.employee.cases.addTeeth(finalCaseId, teeth);
+        const existing = await api.employee.cases.getTeeth(finalCaseId);
+        const existingTeeth = existing.data?.data || existing.data || [];
+        if (!existingTeeth.length) {
+          await api.employee.cases.addTeeth(finalCaseId, teeth);
+        }
       }
 
       await api.employee.cases.updateStep(finalCaseId, 5).catch(() => {});
       setSavedRef(caseRef || 'N/A');
       notifySuccess('Case saved successfully!');
     } catch (err) {
-      const msg = err?.response?.data?.detail;
-      const detail = typeof msg === 'object' ? msg?.message : msg;
-      notifyError(detail || 'Failed to save case. Check your subscription limit.');
+      notifyError(extractErrorMessage(err, 'Failed to save case. Check your subscription limit.'));
     } finally {
       setSavingFinal(false);
     }
@@ -280,8 +421,15 @@ const EmployeeNewCase = () => {
     resetCase();
     setPatient({ fullName: '', age: '', caseDate: new Date().toISOString().split('T')[0], notes: '' });
     setUpload(null);
+    setWireframeMode(false);
+    setOrthographicMode(false);
     setSavedRef(null);
     setSuperimposed(false);
+    setCaseData(null);
+    setAnalysisResult(null);
+    setAnalysisError('');
+    setActiveResultTooth(null);
+    setMeshVisibility({ patientScan: true, scanBody: true, analog: true });
   };
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -289,6 +437,31 @@ const EmployeeNewCase = () => {
   const currentBrandForTooth = activeTooth ? (toothBrandSelections[activeTooth] || '') : '';
   const currentAngleForTooth = activeTooth ? (toothAngleSelections?.[activeTooth] ?? '') : '';
   const assignedForTooth = activeTooth ? toothAssignments[activeTooth] : null;
+
+  // ── PATHFINDER HANDOFF ────────────────────────────────────────────────────
+  // Once the patient case is created and the user clicks "Next Step" out of
+  // Step 1, we hand the rest of the flow to the ported pathfinder scan-body
+  // alignment workflow instead of our original Steps 2–5 (which are disabled
+  // below via `false &&` guards). A Back control returns to Step 1.
+  if (currentStep >= 2) {
+    return (
+      <div>
+        <StepProgress activeStep={currentStep} />
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={() => goToStep(1)}
+            className="h-10 px-5 rounded-full border border-slate-600 text-slate-300"
+          >
+            ← Back to Patient Details
+          </button>
+        </div>
+        <div className="mt-4">
+          <PathfinderWorkflow />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -363,8 +536,13 @@ const EmployeeNewCase = () => {
         </section>
       )}
 
+      {/* ── STEPS 2–5 DISABLED (replaced by PathfinderWorkflow, see handoff above) ──
+          Our original upload / library-assignment / superimpose / results /
+          download steps are commented out via the `false &&` guards below.
+          They are kept intact for reference / easy rollback. */}
+
       {/* ── STEP 2 — Upload Scan & Library Assignment ────────────────────── */}
-      {currentStep === 2 && (
+      {SHOW_LEGACY_STEPS && currentStep === 2 && (
         <section className="space-y-4">
           {/* Scan upload */}
           <article className="glass-card p-5">
@@ -388,7 +566,7 @@ const EmployeeNewCase = () => {
                   </div>
                   <button
                     type="button"
-                    onClick={() => { setUpload(null); setWireframeMode(false); }}
+                    onClick={() => { setUpload(null); setWireframeMode(false); setOrthographicMode(false); }}
                     className="text-rose-300 text-sm hover:text-rose-200"
                   >
                     Remove
@@ -396,7 +574,7 @@ const EmployeeNewCase = () => {
                 </div>
                 <div className="rounded-xl border border-cyan-400/35 bg-[#031022] h-[380px] relative">
                   <span className="absolute top-3 left-3 text-xs px-2 py-1 rounded-full border border-cyan-400/30 bg-cyan-500/10 text-cyan-200">3D Scan Preview</span>
-                  <div className="absolute right-3 top-3 flex gap-2 text-xs">
+                  <div className="absolute right-3 top-3 z-10 flex gap-2 text-xs">
                     {['Solid', 'Wireframe'].map((mode) => (
                       <button
                         key={mode}
@@ -407,8 +585,19 @@ const EmployeeNewCase = () => {
                         {mode}
                       </button>
                     ))}
+                    <span className="w-px bg-slate-700 mx-0.5" />
+                    {['Perspective', 'Orthographic'].map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setOrthographicMode(mode === 'Orthographic')}
+                        className={`px-2 py-1 rounded-full ${orthographicMode === (mode === 'Orthographic') ? 'bg-slate-800 text-slate-200' : 'border border-slate-600 text-slate-300'}`}
+                      >
+                        {mode}
+                      </button>
+                    ))}
                   </div>
-                  <ScanPreview3D file={upload} wireframe={wireframeMode} />
+                  <ScanPreview3D file={upload} wireframe={wireframeMode} orthographic={orthographicMode} />
                   <div className="absolute left-3 bottom-3 text-xs text-slate-500">🖱 Drag · Scroll · Right-click to pan</div>
                 </div>
               </div>
@@ -443,7 +632,7 @@ const EmployeeNewCase = () => {
                           onClick={() => {
                             setActiveTooth(tooth);
                             const brand = toothBrandSelections[tooth];
-                            if (brand) fetchLibrariesForBrand(brand);
+                            if (brand) fetchAnglesForBrand(brand);
                           }}
                           className={`px-3 py-2 rounded-full text-sm border transition-colors ${
                             activeTooth === tooth
@@ -625,7 +814,7 @@ const EmployeeNewCase = () => {
       )}
 
       {/* ── STEP 3 — Superimpose ─────────────────────────────────────────── */}
-      {currentStep === 3 && (
+      {SHOW_LEGACY_STEPS && currentStep === 3 && (
         <section className="grid grid-cols-1 xl:grid-cols-12 gap-4">
           <div className="xl:col-span-8 glass-card p-4">
             <h2 className="employee-heading text-lg text-slate-100">Mesh Superimposition</h2>
@@ -633,18 +822,63 @@ const EmployeeNewCase = () => {
               Patient scan is superimposed with the selected scan body to align implant geometry precisely.
             </p>
             <div className="rounded-xl border border-cyan-400/35 bg-[#031022] h-[380px] mt-4 relative">
-              <span className="absolute left-3 top-3 text-xs px-2 py-1 rounded-full border border-cyan-400/35 text-cyan-200">3D Alignment Viewer</span>
-              <div className="h-full grid place-content-center text-slate-400">Superimposition viewer integration point</div>
+              <span className="absolute left-3 top-3 z-10 text-xs px-2 py-1 rounded-full border border-cyan-400/35 bg-cyan-500/10 text-cyan-200">3D Alignment Viewer</span>
+              <div className="absolute right-3 top-3 z-10 flex gap-2 text-xs">
+                {['Solid', 'Wireframe'].map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setWireframeMode(mode === 'Wireframe')}
+                    className={`px-2 py-1 rounded-full ${wireframeMode === (mode === 'Wireframe') ? 'bg-slate-800 text-slate-200' : 'border border-slate-600 text-slate-300'}`}
+                  >
+                    {mode}
+                  </button>
+                ))}
+                <span className="w-px bg-slate-700 mx-0.5" />
+                {['Perspective', 'Orthographic'].map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setOrthographicMode(mode === 'Orthographic')}
+                    className={`px-2 py-1 rounded-full ${orthographicMode === (mode === 'Orthographic') ? 'bg-slate-800 text-slate-200' : 'border border-slate-600 text-slate-300'}`}
+                  >
+                    {mode}
+                  </button>
+                ))}
+              </div>
+              <ResultsViewer3D
+                wireframe={wireframeMode}
+                orthographic={orthographicMode}
+                meshes={[
+                  { id: 'patient-scan', url: patientScanUrl, color: '#90caf9', visible: meshVisibility.patientScan },
+                  { id: 'reference-plane', url: analysisResult?.global_artifacts?.reference_plane_url, color: '#4fc3f7', visible: meshVisibility.scanBody },
+                  { id: 'reference-plane-cube', url: analysisResult?.global_artifacts?.reference_plane_cube_url, color: '#81d4fa', visible: meshVisibility.scanBody },
+                  ...(analysisResult?.results || []).map((r) => ({
+                    id: `analog-${r.tooth_number}`,
+                    url: r.artifacts?.analog_url,
+                    color: '#ff4081',
+                    visible: meshVisibility.analog,
+                  })),
+                ]}
+              />
               <div className="absolute left-3 bottom-3 text-xs text-slate-500">🖱 Drag · Scroll · Right-click to pan</div>
             </div>
           </div>
           <div className="xl:col-span-4 space-y-4">
             <div className="glass-card p-4 space-y-2">
               <h3 className="employee-heading text-slate-100">Mesh Visibility</h3>
-              {['Patient Scan', 'Scan Body Mesh', 'Analog Preview'].map((label) => (
-                <label key={label} className="flex items-center justify-between text-slate-300">
+              {[
+                { key: 'patientScan', label: 'Patient Scan' },
+                { key: 'scanBody', label: 'Scan Body Mesh' },
+                { key: 'analog', label: 'Analog Preview' },
+              ].map(({ key, label }) => (
+                <label key={key} className="flex items-center justify-between text-slate-300">
                   <span>{label}</span>
-                  <input type="checkbox" defaultChecked />
+                  <input
+                    type="checkbox"
+                    checked={meshVisibility[key]}
+                    onChange={(e) => setMeshVisibility((v) => ({ ...v, [key]: e.target.checked }))}
+                  />
                 </label>
               ))}
             </div>
@@ -670,16 +904,19 @@ const EmployeeNewCase = () => {
 
             <div className="glass-card p-4 space-y-3">
               <button
-                onClick={() => setSuperimposed(true)}
-                className="gradient-btn h-10 w-full text-slate-950 font-semibold"
+                onClick={handleProcessSuperimposition}
+                disabled={analysisLoading}
+                className="gradient-btn h-10 w-full text-slate-950 font-semibold disabled:opacity-40 inline-flex items-center justify-center gap-2"
               >
-                Process Superimposition
+                {analysisLoading ? <Spinner /> : null}
+                {analysisLoading ? 'Processing…' : 'Process Superimposition'}
               </button>
-              {superimposed && (
+              {analysisError && <AlertBanner msg={analysisError} variant="red" />}
+              {superimposed && analysisResult && (
                 <>
                   <span className="text-xs px-2 py-1 rounded-full border border-emerald-400/35 bg-emerald-500/20 text-emerald-200">✓ Superimposition Complete</span>
-                  <p className="text-sm text-slate-300">Match score: 92%</p>
-                  <p className="text-sm text-slate-300">Time: ⚡ 2.1s</p>
+                  <p className="text-sm text-slate-300">Match score: {avgFitnessPct ?? '—'}%</p>
+                  <p className="text-sm text-slate-300">Time: ⚡ {analysisResult.processing_time_seconds ?? '—'}s</p>
                 </>
               )}
             </div>
@@ -688,33 +925,103 @@ const EmployeeNewCase = () => {
       )}
 
       {/* ── STEP 4 — Results ─────────────────────────────────────────────── */}
-      {currentStep === 4 && (
+      {SHOW_LEGACY_STEPS && currentStep === 4 && (
         <section className="grid grid-cols-1 xl:grid-cols-10 gap-4">
-          <div className="xl:col-span-6 glass-card p-4 h-[420px] bg-[#031022] border border-cyan-400/35">
+          <div className="xl:col-span-6 glass-card p-4 h-[420px] bg-[#031022] border border-cyan-400/35 relative">
             <h3 className="employee-heading text-slate-100">3D Results Viewer</h3>
-            <div className="h-[360px] grid place-content-center text-slate-400">Result + analog overlay integration point</div>
+            {!analysisResult ? (
+              <div className="h-[360px] grid place-content-center text-slate-400">
+                {analysisError ? <AlertBanner msg={analysisError} variant="red" /> : <Spinner />}
+              </div>
+            ) : (
+              <>
+                <div className="absolute right-3 top-3 z-10 flex gap-2 text-xs">
+                  {['Solid', 'Wireframe'].map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setWireframeMode(mode === 'Wireframe')}
+                      className={`px-2 py-1 rounded-full ${wireframeMode === (mode === 'Wireframe') ? 'bg-slate-800 text-slate-200' : 'border border-slate-600 text-slate-300'}`}
+                    >
+                      {mode}
+                    </button>
+                  ))}
+                  <span className="w-px bg-slate-700 mx-0.5" />
+                  {['Perspective', 'Orthographic'].map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setOrthographicMode(mode === 'Orthographic')}
+                      className={`px-2 py-1 rounded-full ${orthographicMode === (mode === 'Orthographic') ? 'bg-slate-800 text-slate-200' : 'border border-slate-600 text-slate-300'}`}
+                    >
+                      {mode}
+                    </button>
+                  ))}
+                </div>
+                {analysisResult.results?.length > 1 && (
+                  <div className="absolute left-3 top-12 z-10 flex flex-wrap gap-1.5">
+                    {analysisResult.results.map((r) => (
+                      <button
+                        key={r.tooth_number}
+                        type="button"
+                        onClick={() => setActiveResultTooth(r.tooth_number)}
+                        className={`px-2 py-1 rounded-full text-[11px] border ${
+                          (activeResultTooth ?? analysisResult.results[0].tooth_number) === r.tooth_number
+                            ? 'bg-cyan-500/20 border-cyan-400/35 text-cyan-200'
+                            : 'border-slate-600 text-slate-400'
+                        }`}
+                      >
+                        Tooth {r.tooth_number}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className="h-[360px] mt-2">
+                  <ResultsViewer3D
+                    wireframe={wireframeMode}
+                    orthographic={orthographicMode}
+                    meshes={(() => {
+                      const activeTooth = activeResultTooth ?? analysisResult.results[0]?.tooth_number;
+                      const active = resultByTooth[activeTooth];
+                      return [
+                        { id: 'patient-scan', url: patientScanUrl, color: '#90caf9', visible: true },
+                        { id: 'scan-body', url: active?.artifacts?.scan_body_url, color: '#ff4081', visible: true },
+                        { id: 'analog-sb', url: active?.artifacts?.analog_with_scan_body_url, color: '#ffd54f', visible: true },
+                        { id: 'corrector', url: active?.corrector_url, color: '#66bb6a', visible: true },
+                        { id: 'corrector-head', url: active?.corrector_head_url, color: '#5c9ce6', visible: true },
+                      ];
+                    })()}
+                  />
+                </div>
+              </>
+            )}
           </div>
           <div className="xl:col-span-4 space-y-4">
             <div className="glass-card p-4">
               <h4 className="employee-heading text-slate-100">Insertion Angles</h4>
               <div className="mt-3 space-y-3 text-sm">
-                {selectedTeeth.slice(0, 3).map((tooth) => {
-                  const a = toothAssignments[tooth];
+                {(analysisResult?.results || []).map((r) => {
+                  const withinTolerance = r.tolerance_status === 'within';
                   return (
-                    <div key={tooth} className="border border-cyan-400/20 rounded-xl p-3">
-                      <p className="text-slate-300">Tooth {tooth} · {a?.company_name || 'N/A'}</p>
-                      <p className="text-cyan-200 text-xl employee-heading mt-1">{a?.angle_alignment ?? '—'}°</p>
-                      <p className="text-emerald-300 mt-1">✅ Within Tolerance</p>
+                    <div key={r.tooth_number} className="border border-cyan-400/20 rounded-xl p-3">
+                      <p className="text-slate-300">Tooth {r.tooth_number} · {r.library_name || 'N/A'}</p>
+                      <p className="text-cyan-200 text-xl employee-heading mt-1">{r.insertion_angle?.toFixed?.(1) ?? r.insertion_angle}°</p>
+                      <p className={`mt-1 ${withinTolerance ? 'text-emerald-300' : 'text-rose-300'}`}>
+                        {withinTolerance ? '✅ Within Tolerance' : '⚠️ Exceeds Tolerance'}
+                      </p>
                     </div>
                   );
                 })}
+                {analysisResult && analysisResult.results?.length === 0 && (
+                  <p className="text-xs text-slate-400">No matched instances in this analysis.</p>
+                )}
               </div>
             </div>
             <div className="glass-card p-4">
               <h4 className="employee-heading text-slate-100">Summary</h4>
               <ul className="text-sm text-slate-300 mt-2 space-y-1">
-                <li>Total implants: {selectedTeeth.length}</li>
-                <li>Processing time: ⚡ 2.1s</li>
+                <li>Total implants: {analysisResult?.total_implants ?? selectedTeeth.length}</li>
+                <li>Processing time: ⚡ {analysisResult?.processing_time_seconds ?? '—'}s</li>
               </ul>
             </div>
           </div>
@@ -722,7 +1029,7 @@ const EmployeeNewCase = () => {
       )}
 
       {/* ── STEP 5 — Download ────────────────────────────────────────────── */}
-      {currentStep === 5 && (
+      {SHOW_LEGACY_STEPS && currentStep === 5 && (
         <section className="space-y-4">
           <article className="glass-card p-6 text-center border-cyan-400/35">
             <div className="text-cyan-200 text-3xl employee-heading">✦ Case Complete!</div>

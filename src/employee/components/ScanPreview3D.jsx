@@ -4,85 +4,15 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { PLYLoader } from 'three/examples/jsm/loaders/PLYLoader.js';
+import {
+  setMaterialForObject,
+  disposeObject,
+  centerAndScaleObject,
+  centerGeometryInPlace,
+  fitCameraToObject,
+} from '../utils/threeViewerHelpers';
 
-const setMaterialForObject = (object, material) => {
-  object.traverse((node) => {
-    if (node.isMesh) {
-      if (node.material) {
-        if (Array.isArray(node.material)) {
-          node.material.forEach((mat) => mat.dispose());
-        } else {
-          node.material.dispose();
-        }
-      }
-      node.material = material.clone();
-      node.castShadow = true;
-      node.receiveShadow = true;
-    }
-  });
-};
-
-const disposeObject = (object) => {
-  object.traverse((node) => {
-    if (node.isMesh) {
-      if (node.geometry) {
-        node.geometry.dispose();
-      }
-      if (node.material) {
-        if (Array.isArray(node.material)) {
-          node.material.forEach((mat) => mat.dispose());
-        } else {
-          node.material.dispose();
-        }
-      }
-    }
-  });
-};
-
-const centerAndScaleObject = (object) => {
-  const box = new THREE.Box3().setFromObject(object);
-  const size = box.getSize(new THREE.Vector3());
-  const center = box.getCenter(new THREE.Vector3());
-  const maxDim = Math.max(size.x, size.y, size.z) || 1;
-  const scale = 2.4 / maxDim;
-
-  object.position.sub(center);
-  object.scale.setScalar(scale);
-
-  return size.multiplyScalar(scale);
-};
-
-const centerGeometryInPlace = (geometry) => {
-  geometry.computeBoundingBox();
-  const boundingBox = geometry.boundingBox;
-
-  if (!boundingBox) {
-    return;
-  }
-
-  const center = boundingBox.getCenter(new THREE.Vector3());
-  geometry.translate(-center.x, -center.y, -center.z);
-};
-
-const fitCameraToObject = (camera, controls, size) => {
-  const maxDim = Math.max(size.x, size.y, size.z) || 1;
-  const fov = camera.fov * (Math.PI / 180);
-  let cameraZ = Math.abs((maxDim / 2) / Math.tan(fov / 2));
-  cameraZ *= 1.25;
-
-  camera.position.set(0, 0, cameraZ);
-  camera.near = Math.max(maxDim / 1000, 0.01);
-  camera.far = maxDim * 100;
-  camera.updateProjectionMatrix();
-
-  controls.target.set(0, 0, 0);
-  camera.lookAt(0, 0, 0);
-  controls.maxDistance = cameraZ * 3;
-  controls.minDistance = cameraZ * 0.35;
-  controls.update();
-};
-
-const ScanPreview3D = ({ file, wireframe = false }) => {
+const ScanPreview3D = ({ file, wireframe = false, orthographic = false }) => {
   const mountRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -103,7 +33,9 @@ const ScanPreview3D = ({ file, wireframe = false }) => {
     const scene = new THREE.Scene();
     scene.background = new THREE.Color('#031022');
 
-    const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 2000);
+    const camera = orthographic
+      ? new THREE.OrthographicCamera(-1.5, 1.5, 1.5, -1.5, 0.1, 2000)
+      : new THREE.PerspectiveCamera(50, 1, 0.1, 2000);
     camera.position.set(0, 0, 6);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -113,6 +45,12 @@ const ScanPreview3D = ({ file, wireframe = false }) => {
     renderer.toneMappingExposure = 1.05;
 
     const mountElement = mountRef.current;
+    // A bare <canvas> keeps the browser's intrinsic 300x150 CSS box even
+    // inside a 100%-sized parent — setSize's updateStyle=false (below) skips
+    // setting canvas.style entirely, so it must be sized explicitly here.
+    renderer.domElement.style.width = '100%';
+    renderer.domElement.style.height = '100%';
+    renderer.domElement.style.display = 'block';
     mountElement.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -134,7 +72,17 @@ const ScanPreview3D = ({ file, wireframe = false }) => {
       const width = mountElement.clientWidth;
       const height = mountElement.clientHeight;
       renderer.setSize(width, height, false);
-      camera.aspect = width / height;
+      const aspect = width / height;
+
+      if (camera.isOrthographicCamera) {
+        const halfHeight = camera.userData.orthoHalfHeight || 1.5;
+        camera.left = -halfHeight * aspect;
+        camera.right = halfHeight * aspect;
+        camera.top = halfHeight;
+        camera.bottom = -halfHeight;
+      } else {
+        camera.aspect = aspect;
+      }
       camera.updateProjectionMatrix();
     };
 
@@ -174,6 +122,7 @@ const ScanPreview3D = ({ file, wireframe = false }) => {
           centeredGroup = group;
           const size = centerAndScaleObject(group);
           fitCameraToObject(camera, controls, size);
+          resize(); // re-derive ortho frustum left/right for the container's aspect
         }
 
         if (extension === 'stl') {
@@ -189,6 +138,7 @@ const ScanPreview3D = ({ file, wireframe = false }) => {
           centeredGroup = group;
           const size = centerAndScaleObject(group);
           fitCameraToObject(camera, controls, size);
+          resize(); // re-derive ortho frustum left/right for the container's aspect
         }
 
         if (extension === 'ply') {
@@ -204,6 +154,7 @@ const ScanPreview3D = ({ file, wireframe = false }) => {
           centeredGroup = group;
           const size = centerAndScaleObject(group);
           fitCameraToObject(camera, controls, size);
+          resize(); // re-derive ortho frustum left/right for the container's aspect
         }
 
         if (!disposed) {
@@ -244,7 +195,7 @@ const ScanPreview3D = ({ file, wireframe = false }) => {
         mountElement.removeChild(renderer.domElement);
       }
     };
-  }, [file, wireframe]);
+  }, [file, wireframe, orthographic]);
 
   return (
     <div className="relative h-full w-full rounded-xl overflow-hidden">

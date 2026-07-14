@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
     LayoutDashboard,
@@ -14,20 +14,18 @@ import {
 import { cn } from '../../utils/utils';
 import { useGlobal } from '../../context/GlobalContext';
 import { useContextProvider } from '../../ContextProvider';
-import AddLibraryModal from '../modals/AddLibraryModal';
 
 const Sidebar = ({ isOpen, onClose }) => {
     const location = useLocation();
     const { user, logout } = useGlobal();
     const { user: currentAdmin } = useContextProvider();
-    const [isAddLibraryModalOpen, setIsAddLibraryModalOpen] = useState(false);
     const displayName = currentAdmin?.username || currentAdmin?.name || currentAdmin?.email || user?.username || user?.email || 'Admin User';
     const displayRole = currentAdmin?.role || user?.role || 'System Administrator';
     const avatarName = encodeURIComponent(displayName);
 
     const menuItems = [
         { title: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-        { title: 'Library Management', icon: BookOpen, isAction: true },
+        { title: 'Library Management', path: '/library', icon: BookOpen },
         { title: 'Subscription Plans', path: '/plans', icon: ClipboardList },
         { title: 'Payment History', path: '/payments', icon: History },
         { title: 'User Analytics', path: '/users', icon: Users },
@@ -58,26 +56,8 @@ const Sidebar = ({ isOpen, onClose }) => {
                 </div>
 
                 <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto custom-scrollbar">
-                    {menuItems.map((item, idx) => {
+                    {menuItems.map((item) => {
                         const isActive = item.path ? location.pathname === item.path : false;
-
-                        if (item.isAction) {
-                            return (
-                                <button
-                                    key={idx}
-                                    onClick={() => {
-                                        if (item.title === 'Library Management') setIsAddLibraryModalOpen(true);
-                                        if (onClose) onClose();
-                                    }}
-                                    className={cn(
-                                        'w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-300 group font-semibold text-slate-500 hover:bg-slate-50 hover:text-[#0d9488]'
-                                    )}
-                                >
-                                    <item.icon size={20} className="text-slate-400 group-hover:text-[#0d9488] transition-transform duration-300 group-hover:scale-110" />
-                                    <span>{item.title}</span>
-                                </button>
-                            );
-                        }
 
                         return (
                             <Link
@@ -129,11 +109,6 @@ const Sidebar = ({ isOpen, onClose }) => {
                     </button>
                 </div>
             </aside>
-
-            <AddLibraryModal
-                isOpen={isAddLibraryModalOpen}
-                onClose={() => setIsAddLibraryModalOpen(false)}
-            />
         </>
     );
 };
