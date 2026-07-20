@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { X, FileUp, File } from 'lucide-react';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
-import api from '../../Script/api';
+import api, { extractErrorMessage } from '../../Script/api';
 
 const AddLibraryModal = ({ isOpen, onClose, onSuccess }) => {
     const [scanBodyFile, setScanBodyFile] = useState(null);
@@ -23,8 +23,8 @@ const AddLibraryModal = ({ isOpen, onClose, onSuccess }) => {
     const handleSave = async () => {
         setError('');
 
-        if (!scanBodyFile || !analogFile) {
-            setError('Scan body and analog files are required.');
+        if (!scanBodyFile || !analogFile || !angleFiles.length) {
+            setError('Scan body, analog and angle files are required.');
             return;
         }
 
@@ -41,16 +41,18 @@ const AddLibraryModal = ({ isOpen, onClose, onSuccess }) => {
 
             payload.append('scan_body_file', scanBodyFile);
             payload.append('analog_file', analogFile);
-
-            angleFiles.forEach((file) => {
-                payload.append('angle_alignment_files', file);
-            });
-
-            outputFiles.forEach((file) => {
-                payload.append('output_files', file);
-            });
+            payload.append('angle_file', angleFiles[0]);
 
             const response = await api.libraries.create(payload);
+
+            // Output files aren't part of the create contract — attach them
+            // afterwards via the per-library assets endpoint.
+            const libraryId = response.data?.id;
+            if (libraryId && outputFiles.length) {
+                for (const file of outputFiles) {
+                    await api.libraries.uploadAsset(libraryId, { file, asset_type: 'output' });
+                }
+            }
 
             setFormData({
                 company_name: '',
@@ -71,7 +73,7 @@ const AddLibraryModal = ({ isOpen, onClose, onSuccess }) => {
             onClose();
         } catch (err) {
             setIsSaving(false);
-            setError(err.response?.data?.detail || err.response?.data?.message || 'Failed to create library.');
+            setError(extractErrorMessage(err, 'Failed to create library.'));
         }
     };
 
@@ -208,27 +210,25 @@ const AddLibraryModal = ({ isOpen, onClose, onSuccess }) => {
                     </div>
 
                     <div className="space-y-2.5">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Angle Alignment File (.STL / .OBJ) (Optional)</label>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Angle Alignment File (.STL / .OBJ)</label>
                         <div className="group relative border-2 border-dashed border-slate-200 hover:border-teal-500/50 rounded-xl p-6 lg:p-8 transition-all cursor-pointer bg-slate-50/30 hover:bg-teal-50/30">
                             <input
                                 type="file"
                                 accept=".stl,.obj"
-                                multiple
                                 className="absolute inset-0 opacity-0 cursor-pointer z-10"
-                                onChange={(e) => setAngleFiles(Array.from(e.target.files || []))}
+                                onChange={(e) => setAngleFiles(e.target.files[0] ? [e.target.files[0]] : [])}
                             />
                             {angleFiles.length ? (
                                 <div className="flex flex-col items-center justify-center text-center relative z-20">
                                     <div className="w-11 h-11 bg-teal-50 rounded-lg shadow-sm border border-teal-100 flex items-center justify-center text-teal-500 mb-3">
                                         <FileUp size={22} />
                                     </div>
-                                    <p className="text-sm font-bold text-slate-900 mb-1 truncate max-w-full px-4">{angleFiles.length} file(s) selected</p>
-                                    <p className="text-[11px] font-semibold text-slate-500 mb-1 truncate max-w-full px-4">{angleFiles.map((file) => file.name).join(', ')}</p>
+                                    <p className="text-sm font-bold text-slate-900 mb-1 truncate max-w-full px-4">{angleFiles[0]?.name}</p>
                                     <button
                                         onClick={(e) => { e.preventDefault(); e.stopPropagation(); setAngleFiles([]); }}
                                         className="text-[11px] font-bold text-rose-500 hover:text-rose-600 transition-colors"
                                     >
-                                        Remove files
+                                        Remove file
                                     </button>
                                 </div>
                             ) : (

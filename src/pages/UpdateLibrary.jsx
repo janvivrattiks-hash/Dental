@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
-import api, { RESOLVED_BASE_URL } from '../Script/api';
+import api, { RESOLVED_BASE_URL, extractErrorMessage, notifySuccess, notifyError } from '../Script/api';
 
 const ASSET_LABELS = {
     scan_body: { title: 'Scan Body Geometry', subtitle: 'Primary reference for digital impression analysis' },
@@ -35,6 +35,40 @@ const UpdateLibrary = () => {
     const [library, setLibrary] = useState(location.state?.library ?? null);
     const [loading, setLoading] = useState(!location.state?.library);
     const [error, setError] = useState('');
+    const [form, setForm] = useState({ company_name: '', manufacturer_id: '', tolerance_degree: '', angle_degree: '' });
+    const [saving, setSaving] = useState(false);
+
+    // Seed the editable fields once the library is available.
+    useEffect(() => {
+        if (!library) return;
+        setForm({
+            company_name: library.company_name ?? '',
+            manufacturer_id: library.manufacturer_id ?? '',
+            tolerance_degree: library.tolerance_degree ?? '',
+            angle_degree: library.angle_degree ?? library.angle_alignment ?? '',
+        });
+    }, [library]);
+
+    const setField = (key) => (e) => setForm((current) => ({ ...current, [key]: e.target.value }));
+
+    const handleSave = async () => {
+        setSaving(true);
+        try {
+            const payload = new FormData();
+            Object.entries(form).forEach(([key, value]) => {
+                if (value !== undefined && value !== null && value !== '') {
+                    payload.append(key, value);
+                }
+            });
+            await api.libraries.update(id, payload);
+            notifySuccess('Library updated.');
+            navigate('/library');
+        } catch (err) {
+            notifyError(extractErrorMessage(err, 'Failed to update library.'));
+        } finally {
+            setSaving(false);
+        }
+    };
 
     // Refetch if arrived without router state (hard refresh / direct link). The
     // per-id endpoint is employee-scoped (401 for admin), so re-use the admin
@@ -100,8 +134,12 @@ const UpdateLibrary = () => {
                     >
                         Discard
                     </Button>
-                    <Button className="h-11 px-8 bg-[#0d9488] hover:bg-[#0c857a] text-white rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-teal-500/20">
-                        Save Updates
+                    <Button
+                        onClick={handleSave}
+                        disabled={saving}
+                        className="h-11 px-8 bg-[#0d9488] hover:bg-[#0c857a] text-white rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-teal-500/20 disabled:opacity-60"
+                    >
+                        {saving ? 'Saving...' : 'Save Updates'}
                     </Button>
                 </div>
             </div>
@@ -121,19 +159,19 @@ const UpdateLibrary = () => {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                             <div className="space-y-3">
                                 <label className="text-sm font-bold text-slate-900 ml-1">Company Name</label>
-                                <Input defaultValue={library.company_name ?? ''} className="h-14 rounded-2xl bg-slate-50/50 border-slate-100 px-6 font-semibold focus:bg-white" />
+                                <Input value={form.company_name} onChange={setField('company_name')} className="h-14 rounded-2xl bg-slate-50/50 border-slate-100 px-6 font-semibold focus:bg-white" />
                             </div>
                             <div className="space-y-3">
                                 <label className="text-sm font-bold text-slate-900 ml-1">Manufacturer ID</label>
-                                <Input defaultValue={library.manufacturer_id ?? ''} className="h-14 rounded-2xl bg-slate-50/50 border-slate-100 px-6 font-semibold focus:bg-white" />
+                                <Input value={form.manufacturer_id} onChange={setField('manufacturer_id')} className="h-14 rounded-2xl bg-slate-50/50 border-slate-100 px-6 font-semibold focus:bg-white" />
                             </div>
                             <div className="space-y-3">
                                 <label className="text-sm font-bold text-slate-900 ml-1">Tolerance Degree (µm)</label>
-                                <Input defaultValue={library.tolerance_degree ?? ''} className="h-14 rounded-2xl bg-slate-50/50 border-slate-100 px-6 font-semibold focus:bg-white" />
+                                <Input type="number" value={form.tolerance_degree} onChange={setField('tolerance_degree')} className="h-14 rounded-2xl bg-slate-50/50 border-slate-100 px-6 font-semibold focus:bg-white" />
                             </div>
                             <div className="space-y-3">
                                 <label className="text-sm font-bold text-slate-900 ml-1">Angle Degree</label>
-                                <Input defaultValue={library.angle_degree ?? library.angle_alignment ?? ''} className="h-14 rounded-2xl bg-slate-50/50 border-slate-100 px-6 font-semibold focus:bg-white" />
+                                <Input type="number" value={form.angle_degree} onChange={setField('angle_degree')} className="h-14 rounded-2xl bg-slate-50/50 border-slate-100 px-6 font-semibold focus:bg-white" />
                             </div>
                         </div>
                     </div>

@@ -1,6 +1,6 @@
 import { Suspense, useMemo, useState } from 'react';
 import { Canvas, useLoader } from '@react-three/fiber';
-import { TrackballControls, Bounds, Center, Environment, ContactShadows } from '@react-three/drei';
+import { TrackballControls, Bounds, Center, ContactShadows } from '@react-three/drei';
 import * as THREE from 'three';
 import { PLYLoader } from 'three/examples/jsm/loaders/PLYLoader.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
@@ -250,9 +250,6 @@ export default function Viewer3D({ job, visibleInstances, hoveredInstance, seedP
             castShadow
             color="#ffffff"
           />
-
-          {/* Environment for realistic reflections */}
-          <Environment preset="studio" />
 
           <Suspense fallback={<Loader />}>
             <Bounds fit clip margin={1.2}>

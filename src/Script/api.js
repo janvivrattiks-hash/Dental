@@ -14,6 +14,10 @@ export const RESOLVED_BASE_URL = API_BASE_URL || FALLBACK_BASE_URL;
 // (see analysis/alignment routers) — this normalizes both to display text.
 export const extractErrorMessage = (err, fallback) => {
     const detail = err?.response?.data?.detail;
+    // FastAPI 422 returns detail as an array of {loc, msg, type} objects.
+    if (Array.isArray(detail)) {
+        return detail.map((d) => d?.msg || d?.message).filter(Boolean).join(', ') || fallback;
+    }
     return (typeof detail === 'object' ? detail?.message : detail) || fallback;
 };
 
@@ -274,6 +278,7 @@ const api = {
     libraries: {
         list: async () => apiService.get('/admin/libraries'),
         create: async (payload) => apiService.postMultipart('/admin/libraries', payload),
+        update: async (libraryId, payload) => apiService.putMultipart(`/admin/libraries/${libraryId}`, payload),
         uploadAsset: async (libraryId, payload) => apiService.postMultipart(`/admin/libraries/${libraryId}/assets`, payload),
     },
 
